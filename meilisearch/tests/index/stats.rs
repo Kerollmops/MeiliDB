@@ -1,15 +1,18 @@
-use crate::common::Server;
+use crate::common::{
+    shared_does_not_exists_index, Server,
+};
+
 use crate::json;
 
 #[actix_rt::test]
 async fn stats() {
-    let server = Server::new().await;
-    let index = server.index("test");
-    let (_, code) = index.create(Some("id")).await;
+    let server = Server::new_shared();
+    let index = server.unique_index();
+    let (task, code) = index.create(Some("id")).await;
 
     assert_eq!(code, 202);
 
-    index.wait_task(0).await;
+    index.wait_task(task.uid()).await.succeeded();
 
     let (response, code) = index.stats().await;
 
@@ -33,7 +36,7 @@ async fn stats() {
     assert_eq!(code, 202);
     assert_eq!(response["taskUid"], 1);
 
-    index.wait_task(1).await;
+    index.wait_task(response.uid()).await.succeeded();
 
     let (response, code) = index.stats().await;
 
@@ -47,11 +50,11 @@ async fn stats() {
 
 #[actix_rt::test]
 async fn error_get_stats_unexisting_index() {
-    let server = Server::new().await;
-    let (response, code) = server.index("test").stats().await;
+    let index = shared_does_not_exists_index();
+    let (response, code) = index.stats().await;
 
     let expected_response = json!({
-        "message": "Index `test` not found.",
+        "message": "Index `DOES_NOT_EXISTS` not found.",
         "code": "index_not_found",
         "type": "invalid_request",
         "link": "https://docs.meilisearch.com/errors#index_not_found"
