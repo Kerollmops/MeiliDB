@@ -47,10 +47,10 @@ impl Embedder {
                 url: options.url.unwrap_or_else(get_ollama_path),
                 request: serde_json::json!({
                     "model": model,
-                    "prompt": super::rest::REQUEST_PLACEHOLDER,
+                    "input": super::rest::REQUEST_PLACEHOLDER,
                 }),
                 response: serde_json::json!({
-                    "embedding": super::rest::RESPONSE_PLACEHOLDER,
+                    "embeddings": super::rest::RESPONSE_PLACEHOLDER,
                 }),
                 headers: Default::default(),
             },
@@ -118,6 +118,6 @@ impl Embedder {
 }
 
 fn get_ollama_path() -> String {
-    // Important: Hostname not enough, has to be entire path to embeddings endpoint
-    std::env::var("MEILI_OLLAMA_URL").unwrap_or("http://localhost:11434/api/embeddings".to_string())
+    // Important: Hostname not enough, has to be entire path to embeddings endpoint (endpoint can be found in the API documentation: https://github.com/ollama/ollama/blob/main/docs/api.md#generate-embeddings)
+    std::env::var("MEILI_OLLAMA_URL").unwrap_or("http://localhost:11434/api/embed".to_string())
 }
