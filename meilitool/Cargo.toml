@@ -16,5 +16,6 @@ file-store = { path = "../file-store" }
 meilisearch-auth = { path = "../meilisearch-auth" }
 meilisearch-types = { path = "../meilisearch-types" }
 serde = { version = "1.0.209", features = ["derive"] }
+serde_json = { version = "1.0" }
 time = { version = "0.3.36", features = ["formatting"] }
 uuid = { version = "1.10.0", features = ["v4"], default-features = false }

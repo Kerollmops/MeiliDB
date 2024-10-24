@@ -3521,6 +3521,7 @@ dependencies = [
  "meilisearch-auth",
  "meilisearch-types",
  "serde",
+ "serde_json",
  "time",
  "uuid",
 ]
