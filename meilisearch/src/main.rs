@@ -175,7 +175,11 @@ async fn run_http(
     if let Some(config) = opt_clone.get_ssl_config()? {
         http_server.bind_rustls_0_23(opt_clone.http_addr, config)?.run().await?;
     } else {
-        http_server.bind(&opt_clone.http_addr)?.run().await?;
+        if opt_clone.http_addr.starts_with("/") {
+            http_server.bind_uds(&opt_clone.http_addr)?.run().await?
+        } else {
+            http_server.bind(&opt_clone.http_addr)?.run().await?
+        }
     }
     Ok(())
 }
@@ -188,7 +192,13 @@ pub fn print_launch_resume(
     let build_info = build_info::BuildInfo::from_build();
 
     let protocol =
-        if opt.ssl_cert_path.is_some() && opt.ssl_key_path.is_some() { "https" } else { "http" };
+        if opt.ssl_cert_path.is_some() && opt.ssl_key_path.is_some() { 
+            "https"
+        } else if opt.http_addr.starts_with("/") {
+            "unix"
+        } else {
+            "http"
+        };
     let ascii_name = r#"
 888b     d888          d8b 888 d8b                                            888
 8888b   d8888          Y8P 888 Y8P                                            888
