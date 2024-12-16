@@ -480,6 +480,8 @@ impl<'b> ExtractorBbqueueSender<'b> {
         let payload_header = EntryHeader::ArroySetVectors(arroy_set_vector);
         let total_length = EntryHeader::total_set_vectors_size(embeddings.len(), dimensions);
         if total_length > capacity {
+            tracing::trace!("We are spilling a large vector that is {total_length} bytes which is larger than the capacity of {capacity} bytes");
+
             let mut value_file = tempfile::tempfile().map(BufWriter::new)?;
             for embedding in embeddings {
                 let mut embedding_bytes = bytemuck::cast_slice(embedding);
@@ -548,6 +550,8 @@ impl<'b> ExtractorBbqueueSender<'b> {
         let payload_header = EntryHeader::DbOperation(operation);
         let total_length = EntryHeader::total_key_value_size(key_length, value_length);
         if total_length > capacity {
+            tracing::trace!("We are spilling a large entry that is {total_length} bytes which is larger than the capacity of {capacity} bytes");
+
             let mut key_buffer = vec![0; key_length.get() as usize].into_boxed_slice();
             let value_file = tempfile::tempfile()?;
             value_file.set_len(value_length.try_into().unwrap())?;
