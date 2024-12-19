@@ -15,7 +15,7 @@ pub mod star_or;
 pub mod task_view;
 pub mod tasks;
 pub mod versioning;
-pub use milli::{heed, Index};
+pub use milli::{heed, zstd, Index};
 use uuid::Uuid;
 pub use versioning::VERSION_FILE_NAME;
 pub use {milli, serde_cs};

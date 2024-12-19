@@ -8,6 +8,7 @@ use crate::progress::Step;
 #[repr(u8)]
 pub enum IndexingStep {
     PreparingPayloads,
+    PreparingCompressionDictionary,
     ExtractingDocuments,
     ExtractingFacets,
     ExtractingWords,
@@ -26,6 +27,9 @@ impl Step for IndexingStep {
     fn name(&self) -> Cow<'static, str> {
         match self {
             IndexingStep::PreparingPayloads => "preparing update file",
+            IndexingStep::PreparingCompressionDictionary => {
+                "preparing documents compression dictionary"
+            }
             IndexingStep::ExtractingDocuments => "extracting documents",
             IndexingStep::ExtractingFacets => "extracting facets",
             IndexingStep::ExtractingWords => "extracting words",

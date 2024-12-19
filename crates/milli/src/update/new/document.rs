@@ -1,9 +1,11 @@
 use std::collections::{BTreeMap, BTreeSet};
 
+use bumpalo::Bump;
 use bumparaw_collections::RawMap;
 use heed::RoTxn;
 use rustc_hash::FxBuildHasher;
 use serde_json::value::RawValue;
+use zstd::dict::DecoderDictionary;
 
 use super::vector_document::VectorDocument;
 use super::{KvReaderFieldId, KvWriterFieldId};
@@ -62,6 +64,7 @@ impl<'t, Mapper: FieldIdMapper> Clone for DocumentFromDb<'t, Mapper> {
         *self
     }
 }
+
 impl<'t, Mapper: FieldIdMapper> Copy for DocumentFromDb<'t, Mapper> {}
 
 impl<'t, Mapper: FieldIdMapper> Document<'t> for DocumentFromDb<'t, Mapper> {
@@ -128,10 +131,19 @@ impl<'t, Mapper: FieldIdMapper> DocumentFromDb<'t, Mapper> {
         rtxn: &'t RoTxn,
         index: &'t Index,
         db_fields_ids_map: &'t Mapper,
+        db_document_decompression_dictionary: Option<&DecoderDictionary<'static>>,
+        doc_alloc: &'t Bump,
     ) -> Result<Option<Self>> {
-        index.documents.get(rtxn, &docid).map_err(crate::Error::from).map(|reader| {
-            reader.map(|reader| Self { fields_ids_map: db_fields_ids_map, content: reader })
-        })
+        match index.compressed_document(rtxn, docid)? {
+            Some(compressed) => {
+                let content = match db_document_decompression_dictionary {
+                    Some(dictionary) => compressed.decompress_into_bump(doc_alloc, dictionary)?,
+                    None => compressed.as_non_compressed(),
+                };
+                Ok(Some(Self { fields_ids_map: db_fields_ids_map, content }))
+            }
+            None => Ok(None),
+        }
     }
 
     pub fn field(&self, name: &str) -> Result<Option<&'t RawValue>> {
@@ -195,9 +207,18 @@ impl<'a, 'doc, 't, Mapper: FieldIdMapper> MergedDocument<'a, 'doc, 't, Mapper> {
         rtxn: &'t RoTxn,
         index: &'t Index,
         db_fields_ids_map: &'t Mapper,
+        db_document_decompression_dictionary: Option<&'t DecoderDictionary<'static>>,
+        doc_alloc: &'t Bump,
         new_doc: DocumentFromVersions<'a, 'doc>,
     ) -> Result<Self> {
-        let db = DocumentFromDb::new(docid, rtxn, index, db_fields_ids_map)?;
+        let db = DocumentFromDb::new(
+            docid,
+            rtxn,
+            index,
+            db_fields_ids_map,
+            db_document_decompression_dictionary,
+            doc_alloc,
+        )?;
         Ok(Self { new_doc, db })
     }
 
@@ -240,9 +261,10 @@ impl<'d, 'doc: 'd, 't: 'd, Mapper: FieldIdMapper> Document<'d>
             return Ok(Some(vectors));
         }
 
-        let Some(db) = self.db else { return Ok(None) };
-
-        db.vectors_field()
+        match &self.db {
+            Some(db) => db.vectors_field(),
+            None => Ok(None),
+        }
     }
 
     fn geo_field(&self) -> Result<Option<&'d RawValue>> {
@@ -250,9 +272,10 @@ impl<'d, 'doc: 'd, 't: 'd, Mapper: FieldIdMapper> Document<'d>
             return Ok(Some(geo));
         }
 
-        let Some(db) = self.db else { return Ok(None) };
-
-        db.geo_field()
+        match &self.db {
+            Some(db) => db.geo_field(),
+            None => Ok(None),
+        }
     }
 
     fn top_level_fields_count(&self) -> usize {
@@ -263,7 +286,7 @@ impl<'d, 'doc: 'd, 't: 'd, Mapper: FieldIdMapper> Document<'d>
         if let Some(f) = self.new_doc.top_level_field(k)? {
             return Ok(Some(f));
         }
-        if let Some(db) = self.db {
+        if let Some(db) = &self.db {
             return db.field(k);
         }
         Ok(None)

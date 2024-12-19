@@ -64,7 +64,11 @@ impl<'pl> DocumentChanges<'pl> for DocumentDeletionChanges<'pl> {
     where
         'pl: 'doc, // the payload must survive the process calls
     {
-        let current = context.index.document(&context.rtxn, *docid)?;
+        let compressed = context.index.compressed_document(&context.rtxn, *docid)?.unwrap();
+        let current = match context.db_document_decompression_dictionary {
+            Some(dict) => compressed.decompress_into_bump(&context.doc_alloc, dict)?,
+            None => compressed.as_non_compressed(),
+        };
 
         let external_document_id = self.primary_key.extract_docid_from_db(
             current,
@@ -140,7 +144,6 @@ mod test {
         let indexer = Bump::new();
 
         let index = TempIndex::new();
-
         let rtxn = index.read_txn().unwrap();
 
         let db_fields_ids_map = index.fields_ids_map(&rtxn).unwrap();
@@ -148,8 +151,12 @@ mod test {
         let fields_ids_map =
             RwLock::new(FieldIdMapWithMetadata::new(db_fields_ids_map.clone(), metadata_builder));
 
-        let fields_ids_map_store = ThreadLocal::new();
+        let db_document_decompression_dictionary = index
+            .document_compression_raw_dictionary(&rtxn)
+            .unwrap()
+            .map(zstd::dict::DecoderDictionary::copy);
 
+        let fields_ids_map_store = ThreadLocal::new();
         let mut extractor_allocs = ThreadLocal::new();
         let doc_allocs = ThreadLocal::new();
 
@@ -161,6 +168,7 @@ mod test {
         let context = IndexingContext {
             index: &index,
             db_fields_ids_map: &db_fields_ids_map,
+            db_document_decompression_dictionary: db_document_decompression_dictionary.as_ref(),
             new_fields_ids_map: &fields_ids_map,
             doc_allocs: &doc_allocs,
             fields_ids_map_store: &fields_ids_map_store,

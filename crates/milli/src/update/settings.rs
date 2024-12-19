@@ -1944,6 +1944,8 @@ mod tests {
 
         // Check that the searchable field is correctly set to "name" only.
         let rtxn = index.read_txn().unwrap();
+        let mut buffer = Vec::new();
+        let dictionary = index.document_decompression_dictionary(&rtxn).unwrap();
         // When we search for something that is not in
         // the searchable fields it must not return any document.
         let result = index.search(&rtxn).query("23").execute().unwrap();
@@ -1952,10 +1954,17 @@ mod tests {
         // When we search for something that is in the searchable fields
         // we must find the appropriate document.
         let result = index.search(&rtxn).query(r#""kevin""#).execute().unwrap();
-        let documents = index.documents(&rtxn, result.documents_ids).unwrap();
+        let mut compressed_documents =
+            index.compressed_documents(&rtxn, result.documents_ids).unwrap();
         let fid_map = index.fields_ids_map(&rtxn).unwrap();
-        assert_eq!(documents.len(), 1);
-        assert_eq!(documents[0].1.get(fid_map.id("name").unwrap()), Some(&br#""kevin""#[..]));
+        assert_eq!(compressed_documents.len(), 1);
+        let (_id, compressed_document) = compressed_documents.remove(0);
+        let document = compressed_document
+            .decompress_with_optional_dictionary(&mut buffer, dictionary.as_ref())
+            .unwrap();
+
+        assert_eq!(document.get(fid_map.id("name").unwrap()), Some(&br#""kevin""#[..]));
+        drop(dictionary);
         drop(rtxn);
 
         // We change the searchable fields to be the "name" field only.
@@ -1980,6 +1989,7 @@ mod tests {
 
         // Check that the searchable field have been reset and documents are found now.
         let rtxn = index.read_txn().unwrap();
+        let dictionary = index.document_decompression_dictionary(&rtxn).unwrap();
         let fid_map = index.fields_ids_map(&rtxn).unwrap();
         let user_defined_searchable_fields = index.user_defined_searchable_fields(&rtxn).unwrap();
         snapshot!(format!("{user_defined_searchable_fields:?}"), @"None");
@@ -1988,8 +1998,13 @@ mod tests {
         snapshot!(format!("{searchable_fields:?}"), @r###"["id", "name", "age"]"###);
         let result = index.search(&rtxn).query("23").execute().unwrap();
         assert_eq!(result.documents_ids.len(), 1);
-        let documents = index.documents(&rtxn, result.documents_ids).unwrap();
-        assert_eq!(documents[0].1.get(fid_map.id("name").unwrap()), Some(&br#""kevin""#[..]));
+        let mut compressed_documents =
+            index.compressed_documents(&rtxn, result.documents_ids).unwrap();
+        let (_id, compressed_document) = compressed_documents.remove(0);
+        let document = compressed_document
+            .decompress_with_optional_dictionary(&mut buffer, dictionary.as_ref())
+            .unwrap();
+        assert_eq!(document.get(fid_map.id("name").unwrap()), Some(&br#""kevin""#[..]));
     }
 
     #[test]
@@ -2120,15 +2135,20 @@ mod tests {
 
         // Check that the displayed fields are correctly set.
         let rtxn = index.read_txn().unwrap();
+        let mut buffer = Vec::new();
+        let dictionary = index.document_decompression_dictionary(&rtxn).unwrap();
         let fields_ids = index.filterable_fields(&rtxn).unwrap();
         assert_eq!(fields_ids, hashset! { S("age") });
         // Only count the field_id 0 and level 0 facet values.
         // TODO we must support typed CSVs for numbers to be understood.
         let fidmap = index.fields_ids_map(&rtxn).unwrap();
-        for document in index.all_documents(&rtxn).unwrap() {
-            let document = document.unwrap();
-            let json = crate::obkv_to_json(&fidmap.ids().collect::<Vec<_>>(), &fidmap, document.1)
+        for result in index.all_compressed_documents(&rtxn).unwrap() {
+            let (_id, compressed_document) = result.unwrap();
+            let document = compressed_document
+                .decompress_with_optional_dictionary(&mut buffer, dictionary.as_ref())
                 .unwrap();
+            let json =
+                crate::obkv_to_json(&fidmap.ids().collect::<Vec<_>>(), &fidmap, document).unwrap();
             println!("json: {:?}", json);
         }
         let count = index
@@ -2139,6 +2159,7 @@ mod tests {
             .unwrap()
             .count();
         assert_eq!(count, 3);
+        drop(dictionary);
         drop(rtxn);
 
         // Index a little more documents with new and current facets values.
@@ -2228,6 +2249,7 @@ mod tests {
     #[test]
     fn set_asc_desc_field() {
         let index = TempIndex::new();
+        let mut buffer = Vec::new();
 
         // Set the filterable fields to be the age.
         index
@@ -2248,12 +2270,16 @@ mod tests {
 
         // Run an empty query just to ensure that the search results are ordered.
         let rtxn = index.read_txn().unwrap();
+        let dictionary = index.document_decompression_dictionary(&rtxn).unwrap();
         let SearchResult { documents_ids, .. } = index.search(&rtxn).execute().unwrap();
-        let documents = index.documents(&rtxn, documents_ids).unwrap();
+        let compressed_documents = index.compressed_documents(&rtxn, documents_ids).unwrap();
 
         // Fetch the documents "age" field in the ordre in which the documents appear.
         let age_field_id = index.fields_ids_map(&rtxn).unwrap().id("age").unwrap();
-        let iter = documents.into_iter().map(|(_, doc)| {
+        let iter = compressed_documents.into_iter().map(|(_, compressed_doc)| {
+            let doc = compressed_doc
+                .decompress_with_optional_dictionary(&mut buffer, dictionary.as_ref())
+                .unwrap();
             let bytes = doc.get(age_field_id).unwrap();
             let string = std::str::from_utf8(bytes).unwrap();
             string.parse::<u32>().unwrap()
@@ -2645,6 +2671,7 @@ mod tests {
     #[test]
     fn setting_impact_relevancy() {
         let index = TempIndex::new();
+        let mut buffer = Vec::new();
 
         // Set the genres setting
         index
@@ -2676,8 +2703,12 @@ mod tests {
         let rtxn = index.read_txn().unwrap();
         let SearchResult { documents_ids, .. } = index.search(&rtxn).query("S").execute().unwrap();
         let first_id = documents_ids[0];
-        let documents = index.documents(&rtxn, documents_ids).unwrap();
-        let (_, content) = documents.iter().find(|(id, _)| *id == first_id).unwrap();
+        let documents = index.compressed_documents(&rtxn, documents_ids).unwrap();
+        let (_, compressed_content) = documents.iter().find(|(id, _)| *id == first_id).unwrap();
+        let dictionary = index.document_decompression_dictionary(&rtxn).unwrap();
+        let content = compressed_content
+            .decompress_with_optional_dictionary(&mut buffer, dictionary.as_ref())
+            .unwrap();
 
         let fid = index.fields_ids_map(&rtxn).unwrap().id("title").unwrap();
         let line = std::str::from_utf8(content.get(fid).unwrap()).unwrap();
@@ -2851,7 +2882,7 @@ mod tests {
         wtxn.commit().unwrap();
 
         let rtxn = index.write_txn().unwrap();
-        let docs: StdResult<Vec<_>, _> = index.all_documents(&rtxn).unwrap().collect();
+        let docs: StdResult<Vec<_>, _> = index.all_compressed_documents(&rtxn).unwrap().collect();
         let docs = docs.unwrap();
         assert_eq!(docs.len(), 5);
     }

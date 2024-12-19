@@ -21,6 +21,7 @@ use super::ref_cell_ext::RefCellExt;
 use super::thread_local::{FullySend, ThreadLocal};
 use super::StdResult;
 use crate::heed_codec::facet::{FieldDocIdFacetF64Codec, FieldDocIdFacetStringCodec};
+use crate::heed_codec::CompressedObkvU16;
 use crate::index::db_name;
 use crate::index::main_key::{GEO_FACETED_DOCUMENTS_IDS_KEY, GEO_RTREE_KEY};
 use crate::update::new::KvReaderFieldId;
@@ -825,14 +826,31 @@ impl FieldIdDocidFacetSender<'_, '_> {
 pub struct DocumentsSender<'a, 'b>(&'a ExtractorBbqueueSender<'b>);
 
 impl DocumentsSender<'_, '_> {
-    /// TODO do that efficiently
-    pub fn uncompressed(
+    pub fn write_uncompressed(
         &self,
         docid: DocumentId,
         external_id: String,
         document: &KvReaderFieldId,
     ) -> crate::Result<()> {
-        self.0.write_key_value(Database::Documents, &docid.to_be_bytes(), document.as_bytes())?;
+        self.write_raw(docid, external_id, document.as_bytes())
+    }
+
+    pub fn write_compressed(
+        &self,
+        docid: DocumentId,
+        external_id: String,
+        document: &CompressedObkvU16,
+    ) -> crate::Result<()> {
+        self.write_raw(docid, external_id, document.as_bytes())
+    }
+
+    fn write_raw(
+        &self,
+        docid: DocumentId,
+        external_id: String,
+        raw_document_bytes: &[u8],
+    ) -> crate::Result<()> {
+        self.0.write_key_value(Database::Documents, &docid.to_be_bytes(), raw_document_bytes)?;
         self.0.write_key_value(
             Database::ExternalDocumentsIds,
             external_id.as_bytes(),

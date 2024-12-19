@@ -877,7 +877,9 @@ impl IndexScheduler {
                     let mut index_dumper = dump.create_index(uid, &metadata)?;
 
                     let fields_ids_map = index.fields_ids_map(&rtxn)?;
+                    let dictionary = index.document_decompression_dictionary(&rtxn)?;
                     let all_fields: Vec<_> = fields_ids_map.iter().map(|(id, _)| id).collect();
+                    let mut buffer = Vec::new();
                     let embedding_configs = index
                         .embedding_configs(&rtxn)
                         .map_err(|e| Error::from_milli(e, Some(uid.to_string())))?;
@@ -889,7 +891,7 @@ impl IndexScheduler {
                     let (atomic, update_document_progress) = AtomicDocumentStep::new(nb_documents);
                     progress.update_progress(update_document_progress);
                     let documents = index
-                        .all_documents(&rtxn)
+                        .all_compressed_documents(&rtxn)
                         .map_err(|e| Error::from_milli(e, Some(uid.to_string())))?;
                     // 3.1. Dump the documents
                     for ret in documents {
@@ -897,8 +899,12 @@ impl IndexScheduler {
                             return Err(Error::AbortedTask);
                         }
 
-                        let (id, doc) =
+                        let (id, compressed) =
                             ret.map_err(|e| Error::from_milli(e, Some(uid.to_string())))?;
+                        let doc = compressed.decompress_with_optional_dictionary(
+                            &mut buffer,
+                            dictionary.as_ref(),
+                        )?;
 
                         let mut document =
                             milli::obkv_to_json(&all_fields, &fields_ids_map, doc)

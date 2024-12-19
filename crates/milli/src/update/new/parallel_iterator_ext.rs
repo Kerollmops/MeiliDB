@@ -3,9 +3,9 @@ use std::sync::Arc;
 use rayon::iter::ParallelIterator;
 
 pub trait ParallelIteratorExt: ParallelIterator {
-    /// A method to run a closure of all the items and return an owned error.
+    /// A method to run a closure on all the items and return an owned error.
     ///
-    /// The init function is ran only as necessary which is basically once by thread.
+    /// The init function is ran only as necessary which is basically once per thread.
     fn try_arc_for_each_try_init<F, INIT, T, E>(self, init: INIT, op: F) -> Result<(), E>
     where
         E: Send + Sync,

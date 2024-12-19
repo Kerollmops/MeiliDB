@@ -62,6 +62,7 @@ impl<'t, 'i> ClearDocuments<'t, 'i> {
         self.index.put_field_distribution(self.wtxn, &FieldDistribution::default())?;
         self.index.delete_geo_rtree(self.wtxn)?;
         self.index.delete_geo_faceted_documents_ids(self.wtxn)?;
+        self.index.delete_document_compression_dictionary(self.wtxn)?;
 
         // Remove all user-provided bits from the configs
         let mut configs = self.index.embedding_configs(self.wtxn)?;

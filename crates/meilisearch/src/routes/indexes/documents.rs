@@ -973,44 +973,51 @@ fn some_documents<'a, 't: 'a>(
     retrieve_vectors: RetrieveVectors,
 ) -> Result<impl Iterator<Item = Result<Document, ResponseError>> + 'a, ResponseError> {
     let fields_ids_map = index.fields_ids_map(rtxn)?;
+    let dictionary = index.document_decompression_dictionary(rtxn)?;
     let all_fields: Vec<_> = fields_ids_map.iter().map(|(id, _)| id).collect();
     let embedding_configs = index.embedding_configs(rtxn)?;
+    let mut buffer = Vec::new();
 
-    Ok(index.iter_documents(rtxn, doc_ids)?.map(move |ret| {
-        ret.map_err(ResponseError::from).and_then(|(key, document)| -> Result<_, ResponseError> {
-            let mut document = milli::obkv_to_json(&all_fields, &fields_ids_map, document)?;
-            match retrieve_vectors {
-                RetrieveVectors::Ignore => {}
-                RetrieveVectors::Hide => {
-                    document.remove("_vectors");
-                }
-                RetrieveVectors::Retrieve => {
-                    // Clippy is simply wrong
-                    #[allow(clippy::manual_unwrap_or_default)]
-                    let mut vectors = match document.remove("_vectors") {
-                        Some(Value::Object(map)) => map,
-                        _ => Default::default(),
-                    };
-                    for (name, vector) in index.embeddings(rtxn, key)? {
-                        let user_provided = embedding_configs
-                            .iter()
-                            .find(|conf| conf.name == name)
-                            .is_some_and(|conf| conf.user_provided.contains(key));
-                        let embeddings = ExplicitVectors {
-                            embeddings: Some(vector.into()),
-                            regenerate: !user_provided,
-                        };
-                        vectors.insert(
-                            name,
-                            serde_json::to_value(embeddings).map_err(MeilisearchHttpError::from)?,
-                        );
+    Ok(index.iter_compressed_documents(rtxn, doc_ids)?.map(move |ret| {
+        ret.map_err(ResponseError::from).and_then(
+            |(key, compressed_document)| -> Result<_, ResponseError> {
+                let document = compressed_document
+                    .decompress_with_optional_dictionary(&mut buffer, dictionary.as_ref())?;
+                let mut document = milli::obkv_to_json(&all_fields, &fields_ids_map, document)?;
+                match retrieve_vectors {
+                    RetrieveVectors::Ignore => {}
+                    RetrieveVectors::Hide => {
+                        document.remove("_vectors");
                     }
-                    document.insert("_vectors".into(), vectors.into());
+                    RetrieveVectors::Retrieve => {
+                        // Clippy is simply wrong
+                        #[allow(clippy::manual_unwrap_or_default)]
+                        let mut vectors = match document.remove("_vectors") {
+                            Some(Value::Object(map)) => map,
+                            _ => Default::default(),
+                        };
+                        for (name, vector) in index.embeddings(rtxn, key)? {
+                            let user_provided = embedding_configs
+                                .iter()
+                                .find(|conf| conf.name == name)
+                                .is_some_and(|conf| conf.user_provided.contains(key));
+                            let embeddings = ExplicitVectors {
+                                embeddings: Some(vector.into()),
+                                regenerate: !user_provided,
+                            };
+                            vectors.insert(
+                                name,
+                                serde_json::to_value(embeddings)
+                                    .map_err(MeilisearchHttpError::from)?,
+                            );
+                        }
+                        document.insert("_vectors".into(), vectors.into());
+                    }
                 }
-            }
 
-            Ok(document)
-        })
+                Ok(document)
+            },
+        )
     }))
 }
 

@@ -7,6 +7,7 @@ use heed::RoTxn;
 use rustc_hash::FxBuildHasher;
 use serde::Serialize;
 use serde_json::value::RawValue;
+use zstd::dict::DecoderDictionary;
 
 use super::document::{Document, DocumentFromDb, DocumentFromVersions, Versions};
 use super::indexer::de::DeserrRawValue;
@@ -96,9 +97,18 @@ impl<'t> VectorDocumentFromDb<'t> {
         index: &'t Index,
         rtxn: &'t RoTxn,
         db_fields_ids_map: &'t Mapper,
+        db_document_decompression_dictionary: Option<&'t DecoderDictionary<'static>>,
         doc_alloc: &'t Bump,
     ) -> Result<Option<Self>> {
-        let Some(document) = DocumentFromDb::new(docid, rtxn, index, db_fields_ids_map)? else {
+        let Some(document) = DocumentFromDb::new(
+            docid,
+            rtxn,
+            index,
+            db_fields_ids_map,
+            db_document_decompression_dictionary,
+            doc_alloc,
+        )?
+        else {
             return Ok(None);
         };
         let vectors = document.vectors_field()?;
@@ -282,11 +292,19 @@ impl<'doc> MergedVectorDocument<'doc> {
         index: &'doc Index,
         rtxn: &'doc RoTxn,
         db_fields_ids_map: &'doc Mapper,
+        db_document_decompression_dictionary: Option<&'doc DecoderDictionary<'static>>,
         versions: &Versions<'doc>,
         doc_alloc: &'doc Bump,
         embedders: &'doc EmbeddingConfigs,
     ) -> Result<Option<Self>> {
-        let db = VectorDocumentFromDb::new(docid, index, rtxn, db_fields_ids_map, doc_alloc)?;
+        let db = VectorDocumentFromDb::new(
+            docid,
+            index,
+            rtxn,
+            db_fields_ids_map,
+            db_document_decompression_dictionary,
+            doc_alloc,
+        )?;
         let new_doc =
             VectorDocumentFromVersions::new(external_document_id, versions, doc_alloc, embedders)?;
         Ok(if db.is_none() && new_doc.is_none() { None } else { Some(Self { new_doc, db }) })

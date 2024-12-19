@@ -1,7 +1,3 @@
-mod extract_word_docids;
-mod extract_word_pair_proximity_docids;
-mod tokenize_document;
-
 use std::cell::RefCell;
 use std::marker::PhantomData;
 
@@ -21,6 +17,10 @@ use crate::update::new::thread_local::{FullySend, ThreadLocal};
 use crate::update::new::DocumentChange;
 use crate::update::GrenadParameters;
 use crate::{Index, Result, MAX_POSITION_PER_ATTRIBUTE};
+
+mod extract_word_docids;
+mod extract_word_pair_proximity_docids;
+mod tokenize_document;
 
 pub struct SearchableExtractorData<'a, EX: SearchableExtractor> {
     tokenizer: &'a DocumentTokenizer<'a>,

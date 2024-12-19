@@ -1293,12 +1293,13 @@ impl<'a> HitMaker<'a> {
     }
 
     pub fn make_hit(&self, id: u32, score: &[ScoreDetails]) -> milli::Result<SearchHit> {
-        let (_, obkv) =
-            self.index.iter_documents(self.rtxn, std::iter::once(id))?.next().unwrap()?;
+        let mut buffer = Vec::new();
+        let dict = self.index.document_decompression_dictionary(self.rtxn)?;
+        let compressed = self.index.compressed_document(self.rtxn, id)?.unwrap();
+        let doc = compressed.decompress_with_optional_dictionary(&mut buffer, dict.as_ref())?;
 
         // First generate a document with all the displayed fields
-        let displayed_document = make_document(&self.displayed_ids, &self.fields_ids_map, obkv)?;
-
+        let displayed_document = make_document(&self.displayed_ids, &self.fields_ids_map, doc)?;
         let add_vectors_fid =
             self.vectors_fid.filter(|_fid| self.retrieve_vectors == RetrieveVectors::Retrieve);
 

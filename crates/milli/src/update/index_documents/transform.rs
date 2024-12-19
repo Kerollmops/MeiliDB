@@ -174,10 +174,12 @@ impl<'a, 'i> Transform<'a, 'i> {
         let external_documents_ids = self.index.external_documents_ids();
         let mapping = create_fields_mapping(&mut self.fields_ids_map, &fields_index)?;
 
+        let dictionary = self.index.document_decompression_dictionary(wtxn)?;
         let primary_key = cursor.primary_key().to_string();
         let primary_key_id =
             self.fields_ids_map.insert(&primary_key).ok_or(UserError::AttributeLimitReached)?;
 
+        let mut decompression_buffer = Vec::new();
         let mut obkv_buffer = Vec::new();
         let mut document_sorter_value_buffer = Vec::new();
         let mut document_sorter_key_buffer = Vec::new();
@@ -253,18 +255,17 @@ impl<'a, 'i> Transform<'a, 'i> {
             let mut skip_insertion = false;
             if let Some(original_docid) = original_docid {
                 let original_key = original_docid;
-                let base_obkv = self
-                    .index
-                    .documents
-                    .remap_data_type::<heed::types::Bytes>()
-                    .get(wtxn, &original_key)?
-                    .ok_or(InternalError::DatabaseMissingEntry {
-                        db_name: db_name::DOCUMENTS,
-                        key: None,
-                    })?;
+                let base_compressed_obkv = self.index.documents.get(wtxn, &original_key)?.ok_or(
+                    InternalError::DatabaseMissingEntry { db_name: db_name::DOCUMENTS, key: None },
+                )?;
+
+                let base_obkv = base_compressed_obkv.decompress_with_optional_dictionary(
+                    &mut decompression_buffer,
+                    dictionary.as_ref(),
+                )?;
 
                 // we check if the two documents are exactly equal. If it's the case we can skip this document entirely
-                if base_obkv == obkv_buffer {
+                if base_obkv.as_bytes() == obkv_buffer {
                     // we're not replacing anything
                     self.replaced_documents_ids.remove(original_docid);
                     // and we need to put back the original id as it was before
@@ -284,13 +285,12 @@ impl<'a, 'i> Transform<'a, 'i> {
                     document_sorter_value_buffer.clear();
                     document_sorter_value_buffer.push(Operation::Addition as u8);
                     into_del_add_obkv(
-                        KvReaderU16::from_slice(base_obkv),
+                        base_obkv,
                         deladd_operation,
                         &mut document_sorter_value_buffer,
                     )?;
                     self.original_sorter
                         .insert(&document_sorter_key_buffer, &document_sorter_value_buffer)?;
-                    let base_obkv = KvReader::from_slice(base_obkv);
                     if let Some(flattened_obkv) =
                         Self::flatten_from_fields_ids_map(base_obkv, &mut self.fields_ids_map)?
                     {
@@ -354,9 +354,12 @@ impl<'a, 'i> Transform<'a, 'i> {
             documents_seen: documents_count,
         });
 
+        drop(dictionary);
+
         self.index.put_fields_ids_map(wtxn, &self.fields_ids_map)?;
         self.index.put_primary_key(wtxn, &primary_key)?;
         self.documents_count += documents_count;
+
         // Now that we have a valid sorter that contains the user id and the obkv we
         // give it to the last transforming function which returns the TransformOutput.
         Ok(documents_count)
@@ -859,14 +862,20 @@ impl<'a, 'i> Transform<'a, 'i> {
 
         if original_sorter.is_some() || flattened_sorter.is_some() {
             let modified_faceted_fields = settings_diff.modified_faceted_fields();
+            let dictionary = self.index.document_decompression_dictionary(wtxn)?;
+
             let mut original_obkv_buffer = Vec::new();
             let mut flattened_obkv_buffer = Vec::new();
             let mut document_sorter_key_buffer = Vec::new();
+            let mut buffer = Vec::new();
             for result in self.index.external_documents_ids().iter(wtxn)? {
                 let (external_id, docid) = result?;
-                let old_obkv = self.index.documents.get(wtxn, &docid)?.ok_or(
+                let old_compressed_obkv = self.index.documents.get(wtxn, &docid)?.ok_or(
                     InternalError::DatabaseMissingEntry { db_name: db_name::DOCUMENTS, key: None },
                 )?;
+
+                let old_obkv = old_compressed_obkv
+                    .decompress_with_optional_dictionary(&mut buffer, dictionary.as_ref())?;
 
                 let injected_vectors: std::result::Result<
                     serde_json::Map<String, serde_json::Value>,

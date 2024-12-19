@@ -349,7 +349,20 @@ fn criteria_ascdesc() {
     wtxn.commit().unwrap();
 
     let rtxn = index.read_txn().unwrap();
-    let documents = index.all_documents(&rtxn).unwrap().map(|doc| doc.unwrap()).collect::<Vec<_>>();
+    let dictionary = index.document_decompression_dictionary(&rtxn).unwrap();
+    let mut buffers = vec![Vec::new(); index.number_of_documents(&rtxn).unwrap() as usize];
+    let documents = index
+        .all_compressed_documents(&rtxn)
+        .unwrap()
+        .zip(buffers.iter_mut())
+        .map(|(compressed, buffer)| {
+            let (id, compressed) = compressed.unwrap();
+            let doc = compressed
+                .decompress_with_optional_dictionary(buffer, dictionary.as_ref())
+                .unwrap();
+            (id, doc)
+        })
+        .collect::<Vec<_>>();
 
     for criterion in [Asc(S("name")), Desc(S("name")), Asc(S("age")), Desc(S("age"))] {
         eprintln!("Testing with criterion: {:?}", &criterion);

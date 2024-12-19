@@ -129,7 +129,7 @@ reqwest = { version = "0.12.5", features = [
 sha-1 = { version = "0.10.1", optional = true }
 static-files = { version = "0.2.4", optional = true }
 tempfile = { version = "3.10.1", optional = true }
-zip = { version = "2.1.3", optional = true }
+zip = { version = "2.1.3", default-features = false, features = ["deflate"], optional = true }
 
 [features]
 default = ["meilisearch-types/all-tokenizations", "mini-dashboard"]

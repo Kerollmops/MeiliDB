@@ -1,11 +1,11 @@
 use std::cmp::Ordering;
-use std::sync::atomic::AtomicBool;
+use std::sync::atomic::{self, AtomicBool};
 use std::sync::{OnceLock, RwLock};
 use std::thread::{self, Builder};
 
 use big_s::S;
 use bumparaw_collections::RawMap;
-use document_changes::{extract, DocumentChanges, IndexingContext};
+pub use document_changes::{extract, DocumentChanges, IndexingContext};
 pub use document_deletion::DocumentDeletion;
 pub use document_operation::{DocumentOperation, PayloadStats};
 use hashbrown::HashMap;
@@ -17,6 +17,7 @@ use rand::SeedableRng as _;
 use rustc_hash::FxBuildHasher;
 use time::OffsetDateTime;
 pub use update_by_function::UpdateByFunction;
+use zstd::dict::DecoderDictionary;
 
 use super::channel::*;
 use super::extract::*;
@@ -111,6 +112,9 @@ where
         .install(|| extractor_writer_bbqueue(&mut bbbuffers, total_bbbuffer_capacity, 1000))
         .unwrap();
 
+    let db_document_decompression_dictionary = index
+        .document_compression_raw_dictionary(wtxn)
+        .map(|opt| opt.map(DecoderDictionary::copy))?;
     let metadata_builder = MetadataBuilder::from_index(index, wtxn)?;
     let new_fields_ids_map = FieldIdMapWithMetadata::new(new_fields_ids_map, metadata_builder);
     let new_fields_ids_map = RwLock::new(new_fields_ids_map);
@@ -121,12 +125,25 @@ where
     let indexing_context = IndexingContext {
         index,
         db_fields_ids_map,
+        db_document_decompression_dictionary: db_document_decompression_dictionary.as_ref(),
         new_fields_ids_map: &new_fields_ids_map,
         doc_allocs: &doc_allocs,
         fields_ids_map_store: &fields_ids_map_store,
         must_stop_processing,
         progress,
     };
+
+    let document_compression_dictionary = pool
+        .install(|| {
+            retrieve_or_compute_document_compression_dictionary(
+                index,
+                wtxn,
+                document_changes,
+                indexing_context,
+                &mut extractor_allocs,
+            )
+        })
+        .unwrap()?;
 
     let mut index_embeddings = index.embedding_configs(wtxn)?;
     let mut field_distribution = index.field_distribution(wtxn)?;
@@ -148,7 +165,7 @@ where
 
                 // document but we need to create a function that collects and compresses documents.
                 let document_sender = extractor_sender.documents();
-                let document_extractor = DocumentsExtractor::new(document_sender, embedders);
+                let document_extractor = DocumentsExtractor::new(document_sender, document_compression_dictionary.as_ref(), embedders);
                 let datastore = ThreadLocal::with_capacity(rayon::current_num_threads());
                 {
                     let span = tracing::trace_span!(target: "indexing::documents::extract", parent: &indexer_span, "documents");
@@ -429,7 +446,7 @@ where
 
             while let Some(action) = writer_receiver.recv_action() {
                 if _entered_post_merge.is_none()
-                    && finished_extraction.load(std::sync::atomic::Ordering::Relaxed)
+                    && finished_extraction.load(atomic::Ordering::Relaxed)
                 {
                     _entered_post_merge = Some(span.enter());
                 }

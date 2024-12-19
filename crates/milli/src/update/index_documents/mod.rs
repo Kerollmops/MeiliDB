@@ -4,8 +4,8 @@ mod helpers;
 mod transform;
 mod typed_chunk;
 
-use std::collections::HashSet;
-use std::io::{Read, Seek};
+use std::collections::{HashMap, HashSet};
+use std::io::{BufWriter, Read, Seek, Write};
 use std::iter;
 use std::num::NonZeroU32;
 use std::sync::Arc;
@@ -13,9 +13,8 @@ use std::sync::Arc;
 use crossbeam_channel::{Receiver, Sender};
 use enrich::enrich_documents_batch;
 use grenad::{Merger, MergerBuilder};
-use hashbrown::HashMap;
-use heed::types::Str;
-use heed::Database;
+use heed::types::{Bytes, Str};
+use heed::{Database, PutFlags};
 use rand::SeedableRng as _;
 use roaring::RoaringBitmap;
 use serde::{Deserialize, Serialize};
@@ -28,7 +27,8 @@ pub use self::helpers::*;
 pub use self::transform::{Transform, TransformOutput};
 use super::new::StdResult;
 use crate::documents::{obkv_to_object, DocumentsBatchReader};
-use crate::error::{Error, InternalError};
+use crate::error::{Error, InternalError, UserError};
+use crate::heed_codec::{CompressedObkvCodec, CompressedObkvU16};
 use crate::index::{PrefixSearch, PrefixSettings};
 use crate::thread_pool_no_abort::ThreadPoolNoAbortBuilder;
 pub use crate::update::index_documents::helpers::CursorClonableMmap;
@@ -36,7 +36,7 @@ use crate::update::{
     IndexerConfig, UpdateIndexingStep, WordPrefixDocids, WordPrefixIntegerDocids, WordsPrefixesFst,
 };
 use crate::vector::{ArroyWrapper, EmbeddingConfigs};
-use crate::{CboRoaringBitmapCodec, Index, Result, UserError};
+use crate::{CboRoaringBitmapCodec, Index, Result, BEU32};
 
 static MERGED_DATABASE_COUNT: usize = 7;
 static PREFIX_DATABASE_COUNT: usize = 4;
@@ -201,7 +201,7 @@ where
         target = "indexing::details",
         name = "index_documents_raw"
     )]
-    pub fn execute_raw(self, output: TransformOutput) -> Result<u64>
+    pub fn execute_raw(mut self, output: TransformOutput) -> Result<u64>
     where
         FP: Fn(UpdateIndexingStep) + Sync,
         FA: Fn() -> bool + Sync,
@@ -523,6 +523,10 @@ where
             word_fid_docids.map(MergerBuilder::build),
         )?;
 
+        // This call contains an internal condition to ensure we do not always
+        // generate compression dictionaries and always compress documents.
+        self.manage_compression_dictionary()?;
+
         Ok(number_of_documents)
     }
 
@@ -533,7 +537,7 @@ where
         name = "index_documents_prefix_databases"
     )]
     pub fn execute_prefix_databases(
-        self,
+        &mut self,
         word_docids: Option<Merger<CursorClonableMmap, MergeDeladdCboRoaringBitmaps>>,
         exact_word_docids: Option<Merger<CursorClonableMmap, MergeDeladdCboRoaringBitmaps>>,
         word_position_docids: Option<Merger<CursorClonableMmap, MergeDeladdCboRoaringBitmaps>>,
@@ -723,6 +727,64 @@ where
 
         Ok(())
     }
+
+    /// Computes a new dictionay and compress the documents with it in the database.
+    ///
+    /// Documents still need to be directly compressed when being written in the database and a dictionary exists.
+    #[tracing::instrument(
+        level = "trace",
+        skip_all,
+        target = "indexing::compression",
+        name = "compress_documents_database"
+    )]
+    pub fn manage_compression_dictionary(&mut self) -> Result<()> {
+        /// The size of the dictionary generated from a sample of the documents already
+        /// in the database. It will be used when compressing and decompressing documents.
+        const COMPRESSION_DICTIONARY_SIZE: usize = 64_000;
+        /// The minimum number of documents to trigger the generation of the compression dictionary.
+        const COMPRESSION_ON_NUMBER_OF_DOCUMENTS: usize = 10_000;
+
+        if self.index.number_of_documents(self.wtxn)? < COMPRESSION_ON_NUMBER_OF_DOCUMENTS as u64
+            || self.index.document_compression_dictionary(self.wtxn)?.is_some()
+        {
+            return Ok(());
+        }
+
+        let mut sample_file = tempfile::tempfile().map(BufWriter::new)?;
+        let mut sample_sizes = Vec::new();
+        // TODO make this 1_000 be 10k and const
+        let documents = self.index.documents.remap_types::<BEU32, Bytes>();
+        for result in documents.iter(self.wtxn)?.take(COMPRESSION_ON_NUMBER_OF_DOCUMENTS) {
+            let (_id, bytes) = result?;
+            sample_file.write_all(bytes)?;
+            sample_sizes.push(bytes.len());
+        }
+
+        let sample_file = sample_file.into_inner().map_err(|ie| ie.into_error())?;
+        let sample_data = unsafe { memmap2::Mmap::map(&sample_file)? };
+        let dictionary =
+            zstd::dict::from_continuous(&sample_data, &sample_sizes, COMPRESSION_DICTIONARY_SIZE)?;
+        self.index.put_document_compression_dictionary(self.wtxn, &dictionary)?;
+        // safety: We just set the dictionary above. It must be there when we get it back.
+        let dictionary = self.index.document_compression_dictionary(self.wtxn)?.unwrap();
+
+        let mut iter = self.index.documents.iter_mut(self.wtxn)?;
+        while let Some(result) = iter.next() {
+            let (docid, document) = result?;
+            let document = document.as_non_compressed();
+            let compressed = CompressedObkvU16::with_dictionary(document, &dictionary)?;
+            // safety: the compressed document is entirely owned
+            unsafe {
+                iter.put_current_with_options::<CompressedObkvCodec>(
+                    PutFlags::empty(),
+                    &docid,
+                    &compressed,
+                )?;
+            }
+        }
+
+        Ok(())
+    }
 }
 
 /// Run the word prefix docids update operation.
@@ -813,7 +875,7 @@ mod tests {
         let rtxn = index.read_txn().unwrap();
         let count = index.number_of_documents(&rtxn).unwrap();
         assert_eq!(count, 3);
-        let count = index.all_documents(&rtxn).unwrap().count();
+        let count = index.all_compressed_documents(&rtxn).unwrap().count();
         assert_eq!(count, 3);
 
         drop(rtxn);
@@ -822,6 +884,7 @@ mod tests {
     #[test]
     fn simple_document_merge() {
         let mut index = TempIndex::new();
+        let mut buffer = Vec::new();
         index.index_documents_config.update_method = IndexDocumentsMethod::UpdateDocuments;
 
         // First we send 3 documents with duplicate ids and
@@ -840,16 +903,21 @@ mod tests {
         assert_eq!(count, 1);
 
         // Check that we get only one document from the database.
-        let docs = index.documents(&rtxn, Some(0)).unwrap();
-        assert_eq!(docs.len(), 1);
-        let (id, doc) = docs[0];
+        let mut compressed_docs = index.compressed_documents(&rtxn, Some(0)).unwrap();
+        assert_eq!(compressed_docs.len(), 1);
+        let (id, compressed_doc) = compressed_docs.remove(0);
         assert_eq!(id, 0);
+        let dictionary = index.document_decompression_dictionary(&rtxn).unwrap();
+        let doc = compressed_doc
+            .decompress_with_optional_dictionary(&mut buffer, dictionary.as_ref())
+            .unwrap();
 
         // Check that this document is equal to the last one sent.
         let mut doc_iter = doc.iter();
         assert_eq!(doc_iter.next(), Some((0, &b"1"[..])));
         assert_eq!(doc_iter.next(), Some((1, &br#""benoit""#[..])));
         assert_eq!(doc_iter.next(), None);
+        drop(dictionary);
         drop(rtxn);
 
         // Second we send 1 document with id 1, to force it to be merged with the previous one.
@@ -861,10 +929,14 @@ mod tests {
         assert_eq!(count, 1);
 
         // Check that we get only one document from the database.
-        let docs = index.documents(&rtxn, Some(0)).unwrap();
-        assert_eq!(docs.len(), 1);
-        let (id, doc) = docs[0];
+        let mut compressed_docs = index.compressed_documents(&rtxn, Some(0)).unwrap();
+        assert_eq!(compressed_docs.len(), 1);
+        let (id, compressed_doc) = compressed_docs.remove(0);
         assert_eq!(id, 0);
+        let dictionary = index.document_decompression_dictionary(&rtxn).unwrap();
+        let doc = compressed_doc
+            .decompress_with_optional_dictionary(&mut buffer, dictionary.as_ref())
+            .unwrap();
 
         // Check that this document is equal to the last one sent.
         let mut doc_iter = doc.iter();
@@ -872,6 +944,7 @@ mod tests {
         assert_eq!(doc_iter.next(), Some((1, &br#""benoit""#[..])));
         assert_eq!(doc_iter.next(), Some((2, &b"25"[..])));
         assert_eq!(doc_iter.next(), None);
+        drop(dictionary);
         drop(rtxn);
     }
 
@@ -973,7 +1046,7 @@ mod tests {
         let rtxn = index.read_txn().unwrap();
         let count = index.number_of_documents(&rtxn).unwrap();
         assert_eq!(count, 6);
-        let count = index.all_documents(&rtxn).unwrap().count();
+        let count = index.all_compressed_documents(&rtxn).unwrap().count();
         assert_eq!(count, 6);
 
         db_snap!(index, word_docids, "updated");
@@ -1391,7 +1464,7 @@ mod tests {
         index.add_documents(documents!({ "a" : { "b" : { "c" :  1 }}})).unwrap();
 
         let rtxn = index.read_txn().unwrap();
-        let all_documents_count = index.all_documents(&rtxn).unwrap().count();
+        let all_documents_count = index.all_compressed_documents(&rtxn).unwrap().count();
         assert_eq!(all_documents_count, 1);
         let external_documents_ids = index.external_documents_ids();
         assert!(external_documents_ids.get(&rtxn, "1").unwrap().is_some());
@@ -2870,7 +2943,7 @@ mod tests {
         // Ensuring all the returned IDs actually exists
         let rtxn = index.read_txn().unwrap();
         let res = index.search(&rtxn).execute().unwrap();
-        index.documents(&rtxn, res.documents_ids).unwrap();
+        index.compressed_documents(&rtxn, res.documents_ids).unwrap();
     }
 
     fn delete_documents<'t>(
@@ -3249,7 +3322,7 @@ mod tests {
 
         let rtxn = index.read_txn().unwrap();
         // list all documents
-        let results = index.all_documents(&rtxn).unwrap();
+        let results = index.all_compressed_documents(&rtxn).unwrap();
         for result in results {
             let (id, _) = result.unwrap();
             assert!(
