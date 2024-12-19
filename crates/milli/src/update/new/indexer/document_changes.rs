@@ -12,6 +12,7 @@ use crate::progress::{AtomicDocumentStep, Progress};
 use crate::update::new::parallel_iterator_ext::ParallelIteratorExt as _;
 use crate::update::new::steps::IndexingStep;
 use crate::update::new::thread_local::{FullySend, MostlySend, ThreadLocal};
+use crate::update::GrenadParameters;
 use crate::{FieldsIdsMap, GlobalFieldsIdsMap, Index, InternalError, Result};
 
 pub struct DocumentChangeContext<
@@ -145,6 +146,7 @@ pub struct IndexingContext<
     pub fields_ids_map_store: &'indexer ThreadLocal<FullySend<RefCell<GlobalFieldsIdsMap<'fid>>>>,
     pub must_stop_processing: &'indexer MSP,
     pub progress: &'indexer Progress,
+    pub grenad_parameters: &'indexer GrenadParameters,
 }
 
 impl<
@@ -207,6 +209,7 @@ pub fn extract<
         fields_ids_map_store,
         must_stop_processing,
         progress,
+        grenad_parameters: _,
     }: IndexingContext<'fid, 'indexer, 'index, MSP>,
     extractor_allocs: &'extractor mut ThreadLocal<FullySend<Bump>>,
     datastore: &'data ThreadLocal<EX::Data>,

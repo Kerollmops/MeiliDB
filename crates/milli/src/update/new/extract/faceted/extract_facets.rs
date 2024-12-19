@@ -28,7 +28,7 @@ use crate::{DocumentId, FieldId, Index, Result, MAX_FACET_VALUE_LENGTH};
 pub struct FacetedExtractorData<'a, 'b> {
     attributes_to_extract: &'a [&'a str],
     sender: &'a FieldIdDocidFacetSender<'a, 'b>,
-    grenad_parameters: GrenadParameters,
+    grenad_parameters: &'a GrenadParameters,
     buckets: usize,
 }
 
@@ -374,7 +374,6 @@ fn truncate_str(s: &str) -> &str {
 impl FacetedDocidsExtractor {
     #[tracing::instrument(level = "trace", skip_all, target = "indexing::extract::faceted")]
     pub fn run_extraction<'pl, 'fid, 'indexer, 'index, 'extractor, DC: DocumentChanges<'pl>, MSP>(
-        grenad_parameters: GrenadParameters,
         document_changes: &DC,
         indexing_context: IndexingContext<'fid, 'indexer, 'index, MSP>,
         extractor_allocs: &'extractor mut ThreadLocal<FullySend<Bump>>,
@@ -398,7 +397,7 @@ impl FacetedDocidsExtractor {
 
             let extractor = FacetedExtractorData {
                 attributes_to_extract: &attributes_to_extract,
-                grenad_parameters,
+                grenad_parameters: indexing_context.grenad_parameters,
                 buckets: rayon::current_num_threads(),
                 sender,
             };

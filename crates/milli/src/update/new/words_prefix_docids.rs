@@ -25,7 +25,7 @@ impl WordPrefixDocids {
     fn new(
         database: Database<Bytes, CboRoaringBitmapCodec>,
         prefix_database: Database<Bytes, CboRoaringBitmapCodec>,
-        grenad_parameters: GrenadParameters,
+        grenad_parameters: &GrenadParameters,
     ) -> WordPrefixDocids {
         WordPrefixDocids {
             database,
@@ -161,7 +161,7 @@ impl WordPrefixIntegerDocids {
     fn new(
         database: Database<Bytes, CboRoaringBitmapCodec>,
         prefix_database: Database<Bytes, CboRoaringBitmapCodec>,
-        grenad_parameters: GrenadParameters,
+        grenad_parameters: &GrenadParameters,
     ) -> WordPrefixIntegerDocids {
         WordPrefixIntegerDocids {
             database,
@@ -311,7 +311,7 @@ pub fn compute_word_prefix_docids(
     index: &Index,
     prefix_to_compute: &BTreeSet<Prefix>,
     prefix_to_delete: &BTreeSet<Prefix>,
-    grenad_parameters: GrenadParameters,
+    grenad_parameters: &GrenadParameters,
 ) -> Result<()> {
     WordPrefixDocids::new(
         index.word_docids.remap_key_type(),
@@ -327,7 +327,7 @@ pub fn compute_exact_word_prefix_docids(
     index: &Index,
     prefix_to_compute: &BTreeSet<Prefix>,
     prefix_to_delete: &BTreeSet<Prefix>,
-    grenad_parameters: GrenadParameters,
+    grenad_parameters: &GrenadParameters,
 ) -> Result<()> {
     WordPrefixDocids::new(
         index.exact_word_docids.remap_key_type(),
@@ -343,7 +343,7 @@ pub fn compute_word_prefix_fid_docids(
     index: &Index,
     prefix_to_compute: &BTreeSet<Prefix>,
     prefix_to_delete: &BTreeSet<Prefix>,
-    grenad_parameters: GrenadParameters,
+    grenad_parameters: &GrenadParameters,
 ) -> Result<()> {
     WordPrefixIntegerDocids::new(
         index.word_fid_docids.remap_key_type(),
@@ -359,7 +359,7 @@ pub fn compute_word_prefix_position_docids(
     index: &Index,
     prefix_to_compute: &BTreeSet<Prefix>,
     prefix_to_delete: &BTreeSet<Prefix>,
-    grenad_parameters: GrenadParameters,
+    grenad_parameters: &GrenadParameters,
 ) -> Result<()> {
     WordPrefixIntegerDocids::new(
         index.word_position_docids.remap_key_type(),

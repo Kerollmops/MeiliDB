@@ -18,12 +18,10 @@ pub use vectors::EmbeddingExtractor;
 use super::indexer::document_changes::{DocumentChanges, IndexingContext};
 use super::steps::IndexingStep;
 use super::thread_local::{FullySend, ThreadLocal};
-use crate::update::GrenadParameters;
 use crate::Result;
 
 pub trait DocidsExtractor {
     fn run_extraction<'pl, 'fid, 'indexer, 'index, 'extractor, DC: DocumentChanges<'pl>, MSP>(
-        grenad_parameters: GrenadParameters,
         document_changes: &DC,
         indexing_context: IndexingContext<'fid, 'indexer, 'index, MSP>,
         extractor_allocs: &'extractor mut ThreadLocal<FullySend<Bump>>,

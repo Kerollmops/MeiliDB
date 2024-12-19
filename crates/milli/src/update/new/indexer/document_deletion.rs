@@ -166,6 +166,7 @@ mod test {
             fields_ids_map_store: &fields_ids_map_store,
             must_stop_processing: &(|| false),
             progress: &Progress::default(),
+            grenad_parameters: &Default::default(),
         };
 
         for _ in 0..3 {

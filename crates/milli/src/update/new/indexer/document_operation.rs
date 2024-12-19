@@ -13,7 +13,7 @@ use serde_json::Deserializer;
 
 use super::super::document_change::DocumentChange;
 use super::document_changes::{DocumentChangeContext, DocumentChanges};
-use super::retrieve_or_guess_primary_key;
+use super::guess_primary_key::retrieve_or_guess_primary_key;
 use crate::documents::PrimaryKey;
 use crate::progress::{AtomicPayloadStep, Progress};
 use crate::update::new::document::Versions;
