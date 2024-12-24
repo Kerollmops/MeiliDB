@@ -28,9 +28,9 @@
       "remote_location": "https://milli-benchmarks.fra1.digitaloceanspaces.com/bench/datasets/hackernews/modification/05.ndjson",
       "sha256": "be31d5632602f798e62d1c10c83bdfda2b4deaa068477eacde05fdd247572b82"
     },
-    "hackernews-01-modified-filters.ndjson": {
+    "hackernews-modified-string-filters.ndjson": {
       "local_location": null,
-      "remote_location": "https://milli-benchmarks.fra1.digitaloceanspaces.com/bench/datasets/hackernews/modification/01-modified-filters.ndjson",
+      "remote_location": "https://milli-benchmarks.fra1.digitaloceanspaces.com/bench/datasets/hackernews/modification/02-modified-filters.ndjson",
       "sha256": "b80c245ce1b1df80b9b38800f677f3bd11947ebc62716fb108269d50e796c35c"
     }
   },
@@ -102,7 +102,7 @@
         "route": "indexes/movies/documents",
         "method": "POST",
         "body": {
-          "asset": "hackernews-01-modified-filters.ndjson"
+          "asset": "hackernews-modified-string-filters.ndjson"
         },
         "synchronous": "WaitForTask"
       }
