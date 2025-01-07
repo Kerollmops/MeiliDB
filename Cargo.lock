@@ -3563,6 +3563,7 @@ version = "1.12.0"
 dependencies = [
  "actix-web",
  "anyhow",
+ "bitflags 2.6.0",
  "bumpalo",
  "bumparaw-collections",
  "convert_case 0.6.0",

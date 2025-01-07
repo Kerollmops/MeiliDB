@@ -171,7 +171,7 @@ pub mod policies {
         #[error("Could not decode tenant token, {0}.")]
         CouldNotDecodeTenantToken(jsonwebtoken::errors::Error),
         #[error("Invalid action `{0}`.")]
-        InternalInvalidAction(u8),
+        InternalInvalidAction(u32),
     }
 
     impl From<jsonwebtoken::errors::Error> for AuthError {
@@ -214,14 +214,14 @@ pub mod policies {
         Ok(api_key_uid)
     }
 
-    fn is_keys_action(action: u8) -> bool {
+    fn is_keys_action(action: u32) -> bool {
         use actions::*;
         matches!(action, KEYS_GET | KEYS_CREATE | KEYS_UPDATE | KEYS_DELETE)
     }
 
-    pub struct ActionPolicy<const A: u8>;
+    pub struct ActionPolicy<const A: u32>;
 
-    impl<const A: u8> Policy for ActionPolicy<A> {
+    impl<const A: u32> Policy for ActionPolicy<A> {
         /// Attempts to grant authentication from a bearer token (that can be a tenant token or an API key), the requested Action,
         /// and a list of requested indexes.
         ///
@@ -255,7 +255,7 @@ pub mod policies {
                 };
 
             // check that the indexes are allowed
-            let action = Action::from_repr(A).ok_or(AuthError::InternalInvalidAction(A))?;
+            let action = Action::from_bits(A).ok_or(AuthError::InternalInvalidAction(A))?;
             let auth_filter = auth
                 .get_key_filters(key_uuid, search_rules)
                 .map_err(|_e| AuthError::InvalidApiKey)?;
@@ -294,7 +294,7 @@ pub mod policies {
         }
     }
 
-    impl<const A: u8> ActionPolicy<A> {
+    impl<const A: u32> ActionPolicy<A> {
         fn authenticate_tenant_token(
             auth: &AuthController,
             token: &str,

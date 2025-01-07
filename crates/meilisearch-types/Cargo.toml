@@ -41,6 +41,7 @@ time = { version = "0.3.36", features = [
 ] }
 tokio = "1.38"
 uuid = { version = "1.10.0", features = ["serde", "v4"] }
+bitflags = "2.6.0"
 
 [dev-dependencies]
 insta = "1.39.0"

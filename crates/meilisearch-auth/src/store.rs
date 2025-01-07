@@ -105,7 +105,7 @@ impl HeedAuthStore {
 
         let mut actions = HashSet::new();
         for action in &key.actions {
-            match action {
+            match *action {
                 Action::All => actions.extend(enum_iterator::all::<Action>()),
                 Action::DocumentsAll => {
                     actions.extend(
@@ -128,23 +128,11 @@ impl HeedAuthStore {
                 Action::SettingsAll => {
                     actions.extend([Action::SettingsGet, Action::SettingsUpdate].iter());
                 }
-                Action::DumpsAll => {
-                    actions.insert(Action::DumpsCreate);
-                }
-                Action::SnapshotsAll => {
-                    actions.insert(Action::SnapshotsCreate);
-                }
                 Action::TasksAll => {
                     actions.extend([Action::TasksGet, Action::TasksDelete, Action::TasksCancel]);
                 }
-                Action::StatsAll => {
-                    actions.insert(Action::StatsGet);
-                }
-                Action::MetricsAll => {
-                    actions.insert(Action::MetricsGet);
-                }
                 other => {
-                    actions.insert(*other);
+                    actions.insert(other);
                 }
             }
         }
@@ -293,18 +281,24 @@ impl HeedAuthStore {
 /// optionally on a specific index, for a given key.
 pub struct KeyIdActionCodec;
 
+impl KeyIdActionCodec {
+    fn action_parts_to_32bits([p1, p2, p3, p4]: &[u8; 4]) -> u32 {
+        ((*p1 as u32) << 24) | ((*p2 as u32) << 16) | ((*p3 as u32) << 8) | (*p4 as u32)
+    }
+}
+
 impl<'a> milli::heed::BytesDecode<'a> for KeyIdActionCodec {
     type DItem = (KeyId, Action, Option<&'a [u8]>);
 
     fn bytes_decode(bytes: &'a [u8]) -> StdResult<Self::DItem, BoxedError> {
         let (key_id_bytes, action_bytes) = try_split_array_at(bytes).ok_or(SliceTooShortError)?;
-        let (&action_byte, index) =
-            match try_split_array_at(action_bytes).ok_or(SliceTooShortError)? {
-                ([action], []) => (action, None),
-                ([action], index) => (action, Some(index)),
+        let (action_bits, index) =
+            match try_split_array_at::<u8, 4>(action_bytes).ok_or(SliceTooShortError)? {
+                (action_parts, []) => (Self::action_parts_to_32bits(action_parts), None),
+                (action_parts, index) => (Self::action_parts_to_32bits(action_parts), Some(index)),
             };
         let key_id = Uuid::from_bytes(*key_id_bytes);
-        let action = Action::from_repr(action_byte).ok_or(InvalidActionError { action_byte })?;
+        let action = Action::from_bits(action_bits).ok_or(InvalidActionError { action_bits })?;
 
         Ok((key_id, action, index))
     }
@@ -317,7 +311,7 @@ impl<'a> milli::heed::BytesEncode<'a> for KeyIdActionCodec {
         let mut bytes = Vec::new();
 
         bytes.extend_from_slice(key_id.as_bytes());
-        let action_bytes = u8::to_be_bytes(action.repr());
+        let action_bytes = u32::to_be_bytes(action.bits());
         bytes.extend_from_slice(&action_bytes);
         if let Some(index) = index {
             bytes.extend_from_slice(index);
@@ -332,9 +326,9 @@ impl<'a> milli::heed::BytesEncode<'a> for KeyIdActionCodec {
 pub struct SliceTooShortError;
 
 #[derive(Error, Debug)]
-#[error("cannot construct a valid Action from {action_byte}")]
+#[error("cannot construct a valid Action from {action_bits}")]
 pub struct InvalidActionError {
-    pub action_byte: u8,
+    pub action_bits: u32,
 }
 
 pub fn generate_key_as_hexa(uid: Uuid, master_key: &[u8]) -> String {
