@@ -1,22 +1,22 @@
+use crate::json;
 use meili_snap::{json_string, snapshot};
-use serde_json::{json, Value};
+use serde_json::Value;
 
 use crate::common::Server;
 
 #[actix_rt::test]
 async fn create_and_get_index() {
-    let server = Server::new().await;
-    let index = server.index("test");
-    let (_, code) = index.create(None).await;
+    let server = Server::new_shared();
+    let index = server.unique_index();
+    let (response, code) = index.create(None).await;
 
     assert_eq!(code, 202);
 
-    index.wait_task(0).await;
+    index.wait_task(response.uid()).await;
 
     let (response, code) = index.get().await;
 
     assert_eq!(code, 200);
-    assert_eq!(response["uid"], "test");
     assert!(response.get("createdAt").is_some());
     assert!(response.get("updatedAt").is_some());
     assert_eq!(response["createdAt"], response["updatedAt"]);
@@ -26,13 +26,13 @@ async fn create_and_get_index() {
 
 #[actix_rt::test]
 async fn error_get_unexisting_index() {
-    let server = Server::new().await;
-    let index = server.index("test");
+    let server = Server::new_shared();
+    let index = server.unique_index();
 
     let (response, code) = index.get().await;
 
     let expected_response = json!({
-        "message": "Index `test` not found.",
+        "message": format!("Index `{}` not found.", index.uid),
         "code": "index_not_found",
         "type": "invalid_request",
         "link": "https://docs.meilisearch.com/errors#index_not_found"
@@ -53,19 +53,25 @@ async fn no_index_return_empty_list() {
 
 #[actix_rt::test]
 async fn list_multiple_indexes() {
-    let server = Server::new().await;
-    server.index("test").create(None).await;
-    server.index("test1").create(Some("key")).await;
+    let server = Server::new_shared();
+    let index1 = server.unique_index();
+    let index2 = server.unique_index();
 
-    server.index("test").wait_task(1).await;
+    let (task1, _) = index1.create(None).await;
+    let (_task2, _) = index2.create(Some("key")).await;
+
+    index1.wait_task(task1.uid()).await.succeeded();
 
     let (response, code) = server.list_indexes(None, None).await;
+    dbg!(response.clone());
     assert_eq!(code, 200);
     assert!(response["results"].is_array());
     let arr = response["results"].as_array().unwrap();
-    assert_eq!(arr.len(), 2);
-    assert!(arr.iter().any(|entry| entry["uid"] == "test" && entry["primaryKey"] == Value::Null));
-    assert!(arr.iter().any(|entry| entry["uid"] == "test1" && entry["primaryKey"] == "key"));
+    assert!(arr.len() >= 2);
+    assert!(arr
+        .iter()
+        .any(|entry| entry["uid"] == index1.uid && entry["primaryKey"] == Value::Null));
+    assert!(arr.iter().any(|entry| entry["uid"] == index2.uid && entry["primaryKey"] == "key"));
 }
 
 #[actix_rt::test]
@@ -179,14 +185,14 @@ async fn get_and_paginate_indexes() {
 
 #[actix_rt::test]
 async fn get_invalid_index_uid() {
-    let server = Server::new().await;
-    let index = server.index("this is not a valid index name");
-    let (response, code) = index.get().await;
+    let server = Server::new_shared();
+    let (response, code) =
+        server.create_index_fail(json!({ "uid": "this is not a valid index name" }).into()).await;
 
     snapshot!(code, @"400 Bad Request");
     snapshot!(json_string!(response), @r###"
     {
-      "message": "`this is not a valid index name` is not a valid index uid. Index uid can be an integer or a string containing only alphanumeric characters, hyphens (-) and underscores (_), and can not be more than 512 bytes.",
+      "message": "Invalid value at `.uid`: `this is not a valid index name` is not a valid index uid. Index uid can be an integer or a string containing only alphanumeric characters, hyphens (-) and underscores (_), and can not be more than 512 bytes.",
       "code": "invalid_index_uid",
       "type": "invalid_request",
       "link": "https://docs.meilisearch.com/errors#invalid_index_uid"
