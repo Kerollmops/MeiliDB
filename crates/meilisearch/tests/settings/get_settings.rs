@@ -152,7 +152,7 @@ test_setting_routes!(
     {
         setting: embedders,
         update_verb: patch,
-        default_value: null
+        default_value: {}
     },
     {
         setting: facet_search,
@@ -197,7 +197,7 @@ async fn get_settings() {
     let (response, code) = index.settings().await;
     assert_eq!(code, 200);
     let settings = response.as_object().unwrap();
-    assert_eq!(settings.keys().len(), 19);
+    assert_eq!(settings.keys().len(), 20);
     assert_eq!(settings["displayedAttributes"], json!(["*"]));
     assert_eq!(settings["searchableAttributes"], json!(["*"]));
     assert_eq!(settings["filterableAttributes"], json!([]));
@@ -230,23 +230,12 @@ async fn get_settings() {
     assert_eq!(settings["searchCutoffMs"], json!(null));
     assert_eq!(settings["prefixSearch"], json!("indexingTime"));
     assert_eq!(settings["facetSearch"], json!(true));
+    assert_eq!(settings["embedders"], json!({}));
 }
 
 #[actix_rt::test]
 async fn secrets_are_hidden_in_settings() {
     let server = Server::new().await;
-    let (response, code) = server.set_features(json!({"vectorStore": true})).await;
-
-    meili_snap::snapshot!(code, @"200 OK");
-    meili_snap::snapshot!(meili_snap::json_string!(response), @r###"
-    {
-      "vectorStore": true,
-      "metrics": false,
-      "logsRoute": false,
-      "editDocumentsByFunction": false,
-      "containsFilter": false
-    }
-    "###);
 
     let index = server.index("test");
     let (response, _code) = index.create(None).await;

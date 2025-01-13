@@ -269,6 +269,7 @@ impl Infos {
             indexer_options,
             config_file_path,
             no_analytics: _,
+            experimental_disable_vector_store,
         } = options;
 
         let schedule_snapshot = match schedule_snapshot {
@@ -280,7 +281,7 @@ impl Infos {
             indexer_options;
 
         let RuntimeTogglableFeatures {
-            vector_store,
+            vector_store: _,
             metrics,
             logs_route,
             edit_documents_by_function,
@@ -292,7 +293,7 @@ impl Infos {
         Self {
             env,
             experimental_contains_filter: experimental_contains_filter | contains_filter,
-            experimental_vector_store: vector_store,
+            experimental_vector_store: !experimental_disable_vector_store,
             experimental_edit_documents_by_function: edit_documents_by_function,
             experimental_enable_metrics: experimental_enable_metrics | metrics,
             experimental_search_queue_size,

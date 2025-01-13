@@ -52,6 +52,7 @@ const MEILI_EXPERIMENTAL_LOGS_MODE: &str = "MEILI_EXPERIMENTAL_LOGS_MODE";
 const MEILI_EXPERIMENTAL_REPLICATION_PARAMETERS: &str = "MEILI_EXPERIMENTAL_REPLICATION_PARAMETERS";
 const MEILI_EXPERIMENTAL_ENABLE_LOGS_ROUTE: &str = "MEILI_EXPERIMENTAL_ENABLE_LOGS_ROUTE";
 const MEILI_EXPERIMENTAL_CONTAINS_FILTER: &str = "MEILI_EXPERIMENTAL_CONTAINS_FILTER";
+const MEILI_EXPERIMENTAL_DISABLE_VECTOR_STORE: &str = "MEILI_EXPERIMENTAL_DISABLE_VECTOR_STORE";
 const MEILI_EXPERIMENTAL_ENABLE_METRICS: &str = "MEILI_EXPERIMENTAL_ENABLE_METRICS";
 const MEILI_EXPERIMENTAL_SEARCH_QUEUE_SIZE: &str = "MEILI_EXPERIMENTAL_SEARCH_QUEUE_SIZE";
 const MEILI_EXPERIMENTAL_DROP_SEARCH_AFTER: &str = "MEILI_EXPERIMENTAL_DROP_SEARCH_AFTER";
@@ -360,6 +361,14 @@ pub struct Opt {
     #[serde(default)]
     pub experimental_enable_metrics: bool,
 
+    /// Experimental disabling of the vector store feature. For more information,
+    /// see: <https://www.notion.so/meilisearch/v1-13-AI-search-changes-17a4b06b651f80538b65d31724545def#17a4b06b651f80319796d3e7dbaa57c5>
+    ///
+    /// If set, disables embedder configuration, hybrid search, semantic search and similar requests.
+    #[clap(long, env = MEILI_EXPERIMENTAL_DISABLE_VECTOR_STORE)]
+    #[serde(default)]
+    pub experimental_disable_vector_store: bool,
+
     /// Experimental search queue size. For more information,
     /// see: <https://github.com/orgs/meilisearch/discussions/729>
     ///
@@ -540,6 +549,7 @@ impl Opt {
             experimental_reduce_indexing_memory_usage,
             experimental_max_number_of_batched_tasks,
             experimental_limit_batched_tasks_total_size,
+            experimental_disable_vector_store,
         } = self;
         export_to_env_if_not_present(MEILI_DB_PATH, db_path);
         export_to_env_if_not_present(MEILI_HTTP_ADDR, http_addr);
@@ -587,6 +597,10 @@ impl Opt {
         export_to_env_if_not_present(
             MEILI_EXPERIMENTAL_CONTAINS_FILTER,
             experimental_contains_filter.to_string(),
+        );
+        export_to_env_if_not_present(
+            MEILI_EXPERIMENTAL_DISABLE_VECTOR_STORE,
+            experimental_disable_vector_store.to_string(),
         );
         export_to_env_if_not_present(
             MEILI_EXPERIMENTAL_ENABLE_METRICS,
@@ -680,6 +694,7 @@ impl Opt {
             metrics: self.experimental_enable_metrics,
             logs_route: self.experimental_enable_logs_route,
             contains_filter: self.experimental_contains_filter,
+            disable_vector_store: self.experimental_disable_vector_store,
         }
     }
 }
