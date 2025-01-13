@@ -83,7 +83,7 @@ impl<'ctx, Q: RankingRuleQueryTrait> RankingRule<'ctx, Q> for VectorSort<Q> {
     }
 
     #[allow(clippy::only_used_in_recursion)]
-    #[tracing::instrument(level = "trace", skip_all, target = "search::vector_sort")]
+    #[tracing::instrument(level = "debug", skip_all, target = "search::vector_sort")]
     fn next_bucket(
         &mut self,
         ctx: &mut SearchContext<'ctx>,

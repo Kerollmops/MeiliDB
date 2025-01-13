@@ -606,6 +606,7 @@ impl Embedder {
         }
     }
 
+    #[tracing::instrument(level = "debug", skip_all, target = "search")]
     pub fn embed_one(
         &self,
         text: String,
