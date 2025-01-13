@@ -1893,7 +1893,6 @@ async fn import_dump_v6_containing_experimental_features() {
     meili_snap::snapshot!(code, @"200 OK");
     meili_snap::snapshot!(meili_snap::json_string!(response), @r###"
     {
-      "vectorStore": false,
       "metrics": false,
       "logsRoute": false,
       "editDocumentsByFunction": false,
@@ -1988,16 +1987,7 @@ async fn generate_and_import_dump_containing_vectors() {
     let temp = tempfile::tempdir().unwrap();
     let mut opt = default_settings(temp.path());
     let server = Server::new_with_options(opt.clone()).await.unwrap();
-    let (code, _) = server.set_features(json!({"vectorStore": true})).await;
-    snapshot!(code, @r###"
-    {
-      "vectorStore": true,
-      "metrics": false,
-      "logsRoute": false,
-      "editDocumentsByFunction": false,
-      "containsFilter": false
-    }
-    "###);
+
     let index = server.index("pets");
     let (response, code) = index
         .update_settings(json!(
@@ -2063,7 +2053,6 @@ async fn generate_and_import_dump_containing_vectors() {
     meili_snap::snapshot!(code, @"200 OK");
     meili_snap::snapshot!(meili_snap::json_string!(response), @r###"
     {
-      "vectorStore": true,
       "metrics": false,
       "logsRoute": false,
       "editDocumentsByFunction": false,

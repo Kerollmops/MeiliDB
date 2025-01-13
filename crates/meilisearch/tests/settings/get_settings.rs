@@ -235,18 +235,6 @@ async fn get_settings() {
 #[actix_rt::test]
 async fn secrets_are_hidden_in_settings() {
     let server = Server::new().await;
-    let (response, code) = server.set_features(json!({"vectorStore": true})).await;
-
-    meili_snap::snapshot!(code, @"200 OK");
-    meili_snap::snapshot!(meili_snap::json_string!(response), @r###"
-    {
-      "vectorStore": true,
-      "metrics": false,
-      "logsRoute": false,
-      "editDocumentsByFunction": false,
-      "containsFilter": false
-    }
-    "###);
 
     let index = server.index("test");
     let (response, _code) = index.create(None).await;
