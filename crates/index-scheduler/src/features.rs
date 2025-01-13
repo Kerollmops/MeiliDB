@@ -110,6 +110,7 @@ impl FeatureData {
             metrics: metrics || persisted_features.metrics,
             logs_route: logs_route || persisted_features.logs_route,
             contains_filter: contains_filter || persisted_features.contains_filter,
+            vector_store: true,
             ..persisted_features
         }));
 
