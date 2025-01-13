@@ -277,3 +277,155 @@ async fn reset_embedder_documents() {
     }
     "###);
 }
+
+#[actix_rt::test]
+async fn ollama_url_checks() {
+    let server = super::get_server_vector().await;
+    let index = server.index("doggo");
+
+    let (response, code) = index
+  .update_settings(json!({
+    "embedders": { "ollama": {"source": "ollama", "model": "toto", "dimensions": 1, "url": "http://localhost:11434/api/embeddings"}},
+  }))
+  .await;
+    snapshot!(code, @"202 Accepted");
+    let response = server.wait_task(response.uid()).await;
+
+    snapshot!(response, @r###"
+    {
+      "uid": "[uid]",
+      "batchUid": "[batch_uid]",
+      "indexUid": "doggo",
+      "status": "succeeded",
+      "type": "settingsUpdate",
+      "canceledBy": null,
+      "details": {
+        "embedders": {
+          "ollama": {
+            "source": "ollama",
+            "model": "toto",
+            "dimensions": 1,
+            "url": "[url]"
+          }
+        }
+      },
+      "error": null,
+      "duration": "[duration]",
+      "enqueuedAt": "[date]",
+      "startedAt": "[date]",
+      "finishedAt": "[date]"
+    }
+    "###);
+
+    let (response, code) = index
+    .update_settings(json!({
+      "embedders": { "ollama": {"source": "ollama", "model": "toto", "dimensions": 1, "url": "http://localhost:11434/api/embed"}},
+    }))
+    .await;
+    snapshot!(code, @"202 Accepted");
+    let response = server.wait_task(response.uid()).await;
+
+    snapshot!(response, @r###"
+    {
+      "uid": "[uid]",
+      "batchUid": "[batch_uid]",
+      "indexUid": "doggo",
+      "status": "succeeded",
+      "type": "settingsUpdate",
+      "canceledBy": null,
+      "details": {
+        "embedders": {
+          "ollama": {
+            "source": "ollama",
+            "model": "toto",
+            "dimensions": 1,
+            "url": "[url]"
+          }
+        }
+      },
+      "error": null,
+      "duration": "[duration]",
+      "enqueuedAt": "[date]",
+      "startedAt": "[date]",
+      "finishedAt": "[date]"
+    }
+    "###);
+
+    let (response, code) = index
+      .update_settings(json!({
+        "embedders": { "ollama": {"source": "ollama", "model": "toto", "dimensions": 1, "url": "http://localhost:11434/api/embedd"}},
+      }))
+      .await;
+    snapshot!(code, @"202 Accepted");
+    let response = server.wait_task(response.uid()).await;
+
+    snapshot!(response, @r###"
+    {
+      "uid": "[uid]",
+      "batchUid": "[batch_uid]",
+      "indexUid": "doggo",
+      "status": "failed",
+      "type": "settingsUpdate",
+      "canceledBy": null,
+      "details": {
+        "embedders": {
+          "ollama": {
+            "source": "ollama",
+            "model": "toto",
+            "dimensions": 1,
+            "url": "[url]"
+          }
+        }
+      },
+      "error": {
+        "message": "Index `doggo`: Error while generating embeddings: user error: unsupported Ollama URL.\n  - For `ollama` sources, the URL must end with `/api/embed` or `/api/embeddings`\n  - Got `http://localhost:11434/api/embedd`",
+        "code": "vector_embedding_error",
+        "type": "invalid_request",
+        "link": "https://docs.meilisearch.com/errors#vector_embedding_error"
+      },
+      "duration": "[duration]",
+      "enqueuedAt": "[date]",
+      "startedAt": "[date]",
+      "finishedAt": "[date]"
+    }
+    "###);
+
+    let (response, code) = index
+        .update_settings(json!({
+          "embedders": { "ollama": {"source": "ollama", "model": "toto", "dimensions": 1, "url": "http://localhost:11434/v1/embeddings"}},
+        }))
+        .await;
+    snapshot!(code, @"202 Accepted");
+    let response = server.wait_task(response.uid()).await;
+
+    snapshot!(response, @r###"
+    {
+      "uid": "[uid]",
+      "batchUid": "[batch_uid]",
+      "indexUid": "doggo",
+      "status": "failed",
+      "type": "settingsUpdate",
+      "canceledBy": null,
+      "details": {
+        "embedders": {
+          "ollama": {
+            "source": "ollama",
+            "model": "toto",
+            "dimensions": 1,
+            "url": "[url]"
+          }
+        }
+      },
+      "error": {
+        "message": "Index `doggo`: Error while generating embeddings: user error: unsupported Ollama URL.\n  - For `ollama` sources, the URL must end with `/api/embed` or `/api/embeddings`\n  - Got `http://localhost:11434/v1/embeddings`",
+        "code": "vector_embedding_error",
+        "type": "invalid_request",
+        "link": "https://docs.meilisearch.com/errors#vector_embedding_error"
+      },
+      "duration": "[duration]",
+      "enqueuedAt": "[date]",
+      "startedAt": "[date]",
+      "finishedAt": "[date]"
+    }
+    "###);
+}

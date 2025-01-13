@@ -38,26 +38,46 @@ impl EmbedderOptions {
             dimensions,
         }
     }
+
+    fn into_rest_embedder_config(self) -> Result<RestEmbedderOptions, NewEmbedderError> {
+        let url = self.url.unwrap_or_else(get_ollama_path);
+        let model = self.embedding_model.as_str();
+
+        // **warning**: do not swap these two `if`s, as the second one is always true when the first one is.
+        let (request, response) = if url.ends_with("/api/embeddings") {
+            (
+                serde_json::json!({"model": model, "input": [super::rest::REQUEST_PLACEHOLDER, super::rest::REPEAT_PLACEHOLDER]}),
+                serde_json::json!({"embeddings": [super::rest::RESPONSE_PLACEHOLDER, super::rest::REPEAT_PLACEHOLDER]}),
+            )
+        } else if url.ends_with("/api/embed") {
+            (
+                serde_json::json!({
+                    "model": model,
+                    "prompt": super::rest::REQUEST_PLACEHOLDER,
+                }),
+                serde_json::json!({
+                    "embedding": super::rest::RESPONSE_PLACEHOLDER,
+                }),
+            )
+        } else {
+            return Err(NewEmbedderError::ollama_unsupported_url(url));
+        };
+        Ok(RestEmbedderOptions {
+            api_key: self.api_key,
+            dimensions: self.dimensions,
+            distribution: self.distribution,
+            url,
+            request,
+            response,
+            headers: Default::default(),
+        })
+    }
 }
 
 impl Embedder {
     pub fn new(options: EmbedderOptions) -> Result<Self, NewEmbedderError> {
-        let model = options.embedding_model.as_str();
         let rest_embedder = match RestEmbedder::new(
-            RestEmbedderOptions {
-                api_key: options.api_key,
-                dimensions: options.dimensions,
-                distribution: options.distribution,
-                url: options.url.unwrap_or_else(get_ollama_path),
-                request: serde_json::json!({
-                    "model": model,
-                    "prompt": super::rest::REQUEST_PLACEHOLDER,
-                }),
-                response: serde_json::json!({
-                    "embedding": super::rest::RESPONSE_PLACEHOLDER,
-                }),
-                headers: Default::default(),
-            },
+            options.into_rest_embedder_config()?,
             super::rest::ConfigurationSource::Ollama,
         ) {
             Ok(embedder) => embedder,
