@@ -67,6 +67,30 @@ get_os() {
     return 0
 }
 
+# Gets the C lib the system is using by setting the $c_lib variable.
+# Returns 0 in case of success, 1 otherwise.
+get_C_library(){
+  if [ "$os" != 'linux' ] ; then
+    return 0
+  fi
+  if ldd --version | grep -qi eglibc; then
+    c_lib='eglibc'
+    return 0
+  elif ldd --version | grep -qi glibc; then
+    c_lib='glibc'
+    return 0
+  elif ldd --version | grep -qi musl; then
+    c_library_failure_usage
+    return 1
+  elif ldd --version | grep -qi bionic; then
+    c_library_failure_usage
+    return 1
+  else
+    return 1
+  fi
+  return 0
+}
+
 # Gets the architecture by setting the $archi variable.
 # Returns 0 in case of success, 1 otherwise.
 get_archi() {
@@ -108,6 +132,13 @@ not_available_failure_usage() {
     echo 'Follow the steps at the page ("Source" tab): https://www.meilisearch.com/docs/learn/getting_started/installation'
 }
 
+c_library_failure_usage() {
+    printf "$RED%s\n$DEFAULT" 'ERROR: Meilisearch is designed to work with certain C libraries, such as glibc. Ensure that your system uses a compatible C library environment.'
+    echo ''
+    echo 'However, you can easily compile the binary from the source files or using the docker image'
+    echo 'Follow the steps at the page ("Source" tab): https://www.meilisearch.com/docs/learn/getting_started/installation#local-installation'
+}
+
 fetch_release_failure_usage() {
     echo ''
     printf "$RED%s\n$DEFAULT" 'ERROR: Impossible to get the latest stable version of Meilisearch.'
@@ -136,6 +167,12 @@ fill_release_variables() {
         not_available_failure_usage
         exit 1
      fi
+     # Fill $c_lib variable.
+     if ! get_C_library; then
+       c_library_failure_usage
+       exit 1
+     fi
+
 }
 
 download_binary() {
