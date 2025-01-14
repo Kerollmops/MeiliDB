@@ -32,7 +32,7 @@ impl<Q: RankingRuleQueryTrait> VectorSort<Q> {
             .index
             .embedder_category_id
             .get(ctx.txn, embedder_name)?
-            .ok_or_else(|| crate::UserError::InvalidEmbedder(embedder_name.to_owned()))?;
+            .ok_or_else(|| crate::UserError::InvalidSearchEmbedder(embedder_name.to_owned()))?;
 
         Ok(Self {
             query: None,

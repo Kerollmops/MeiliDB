@@ -518,17 +518,6 @@ async fn get_document_by_filter() {
 async fn get_document_with_vectors() {
     let server = Server::new().await;
     let index = server.index("doggo");
-    let (value, code) = server.set_features(json!({"vectorStore": true})).await;
-    snapshot!(code, @"200 OK");
-    snapshot!(value, @r###"
-    {
-      "vectorStore": true,
-      "metrics": false,
-      "logsRoute": false,
-      "editDocumentsByFunction": false,
-      "containsFilter": false
-    }
-    "###);
 
     let (response, code) = index
         .update_settings(json!({

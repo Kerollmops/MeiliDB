@@ -56,19 +56,6 @@ impl RoFeatures {
         }
     }
 
-    pub fn check_vector(&self, disabled_action: &'static str) -> Result<()> {
-        if self.runtime.vector_store {
-            Ok(())
-        } else {
-            Err(FeatureNotEnabledError {
-                disabled_action,
-                feature: "vector store",
-                issue_link: "https://github.com/meilisearch/product/discussions/677",
-            }
-            .into())
-        }
-    }
-
     pub fn check_edit_documents_by_function(&self, disabled_action: &'static str) -> Result<()> {
         if self.runtime.edit_documents_by_function {
             Ok(())

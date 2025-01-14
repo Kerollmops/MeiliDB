@@ -19,8 +19,8 @@ use crate::extractors::authentication::GuardedData;
 use crate::extractors::sequential_extractor::SeqHandler;
 use crate::routes::indexes::similar_analytics::{SimilarAggregator, SimilarGET, SimilarPOST};
 use crate::search::{
-    add_search_rules, perform_similar, RankingScoreThresholdSimilar, RetrieveVectors, SearchKind,
-    SimilarQuery, SimilarResult, DEFAULT_SEARCH_LIMIT, DEFAULT_SEARCH_OFFSET,
+    add_search_rules, perform_similar, RankingScoreThresholdSimilar, RetrieveVectors, Route,
+    SearchKind, SimilarQuery, SimilarResult, DEFAULT_SEARCH_LIMIT, DEFAULT_SEARCH_OFFSET,
 };
 
 #[derive(OpenApi)]
@@ -216,11 +216,7 @@ async fn similar(
     index_uid: IndexUid,
     mut query: SimilarQuery,
 ) -> Result<SimilarResult, ResponseError> {
-    let features = index_scheduler.features();
-
-    features.check_vector("Using the similar API")?;
-
-    let retrieve_vectors = RetrieveVectors::new(query.retrieve_vectors, features)?;
+    let retrieve_vectors = RetrieveVectors::new(query.retrieve_vectors);
 
     // Tenant token search_rules.
     if let Some(search_rules) = index_scheduler.filters().get_index_search_rules(&index_uid) {
@@ -235,6 +231,7 @@ async fn similar(
         &index,
         &query.embedder,
         None,
+        Route::Similar,
     )?;
 
     tokio::task::spawn_blocking(move || {
@@ -281,7 +278,7 @@ pub struct SimilarQueryGet {
     #[deserr(default, error = DeserrQueryParamError<InvalidSimilarRankingScoreThreshold>, default)]
     #[param(value_type = Option<f32>)]
     pub ranking_score_threshold: Option<RankingScoreThresholdGet>,
-    #[deserr(error = DeserrQueryParamError<InvalidEmbedder>)]
+    #[deserr(error = DeserrQueryParamError<InvalidSimilarEmbedder>)]
     pub embedder: String,
 }
 

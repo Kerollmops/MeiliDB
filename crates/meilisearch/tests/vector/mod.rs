@@ -13,36 +13,13 @@ use crate::common::{default_settings, GetAllDocumentsOptions, Server};
 use crate::json;
 
 async fn get_server_vector() -> Server {
-    let server = Server::new().await;
-    let (value, code) = server.set_features(json!({"vectorStore": true})).await;
-    snapshot!(code, @"200 OK");
-    snapshot!(value, @r###"
-  {
-    "vectorStore": true,
-    "metrics": false,
-    "logsRoute": false,
-    "editDocumentsByFunction": false,
-    "containsFilter": false
-  }
-  "###);
-    server
+    Server::new().await
 }
 
 #[actix_rt::test]
 async fn add_remove_user_provided() {
     let server = Server::new().await;
     let index = server.index("doggo");
-    let (value, code) = server.set_features(json!({"vectorStore": true})).await;
-    snapshot!(code, @"200 OK");
-    snapshot!(value, @r###"
-    {
-      "vectorStore": true,
-      "metrics": false,
-      "logsRoute": false,
-      "editDocumentsByFunction": false,
-      "containsFilter": false
-    }
-    "###);
 
     let (response, code) = index
         .update_settings(json!({
@@ -187,17 +164,6 @@ async fn add_remove_user_provided() {
 
 async fn generate_default_user_provided_documents(server: &Server) -> Index {
     let index = server.index("doggo");
-    let (value, code) = server.set_features(json!({"vectorStore": true})).await;
-    snapshot!(code, @"200 OK");
-    snapshot!(value, @r###"
-    {
-      "vectorStore": true,
-      "metrics": false,
-      "logsRoute": false,
-      "editDocumentsByFunction": false,
-      "containsFilter": false
-    }
-    "###);
 
     let (response, code) = index
         .update_settings(json!({
@@ -654,17 +620,6 @@ async fn add_remove_one_vector_4588() {
     // https://github.com/meilisearch/meilisearch/issues/4588
     let server = Server::new().await;
     let index = server.index("doggo");
-    let (value, code) = server.set_features(json!({"vectorStore": true})).await;
-    snapshot!(code, @"200 OK");
-    snapshot!(value, @r###"
-    {
-      "vectorStore": true,
-      "metrics": false,
-      "logsRoute": false,
-      "editDocumentsByFunction": false,
-      "containsFilter": false
-    }
-    "###);
 
     let (response, code) = index
         .update_settings(json!({

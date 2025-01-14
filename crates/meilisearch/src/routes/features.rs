@@ -46,7 +46,6 @@ pub fn configure(cfg: &mut web::ServiceConfig) {
     security(("Bearer" = ["experimental_features.get", "experimental_features.*", "*"])),
     responses(
         (status = OK, description = "Experimental features are returned", body = RuntimeTogglableFeatures, content_type = "application/json", example = json!(RuntimeTogglableFeatures {
-            vector_store: Some(true),
             metrics: Some(true),
             logs_route: Some(false),
             edit_documents_by_function: Some(false),
@@ -71,6 +70,7 @@ async fn get_features(
     let features = index_scheduler.features();
 
     let features = features.runtime_features();
+    let features: RuntimeTogglableFeatures = features.into();
     debug!(returns = ?features, "Get features");
     HttpResponse::Ok().json(features)
 }
@@ -81,8 +81,6 @@ async fn get_features(
 #[schema(rename_all = "camelCase")]
 pub struct RuntimeTogglableFeatures {
     #[deserr(default)]
-    pub vector_store: Option<bool>,
-    #[deserr(default)]
     pub metrics: Option<bool>,
     #[deserr(default)]
     pub logs_route: Option<bool>,
@@ -92,9 +90,26 @@ pub struct RuntimeTogglableFeatures {
     pub contains_filter: Option<bool>,
 }
 
+impl From<meilisearch_types::features::RuntimeTogglableFeatures> for RuntimeTogglableFeatures {
+    fn from(value: meilisearch_types::features::RuntimeTogglableFeatures) -> Self {
+        let meilisearch_types::features::RuntimeTogglableFeatures {
+            metrics,
+            logs_route,
+            edit_documents_by_function,
+            contains_filter,
+        } = value;
+
+        Self {
+            metrics: Some(metrics),
+            logs_route: Some(logs_route),
+            edit_documents_by_function: Some(edit_documents_by_function),
+            contains_filter: Some(contains_filter),
+        }
+    }
+}
+
 #[derive(Serialize)]
 pub struct PatchExperimentalFeatureAnalytics {
-    vector_store: bool,
     metrics: bool,
     logs_route: bool,
     edit_documents_by_function: bool,
@@ -108,7 +123,6 @@ impl Aggregate for PatchExperimentalFeatureAnalytics {
 
     fn aggregate(self: Box<Self>, new: Box<Self>) -> Box<Self> {
         Box::new(Self {
-            vector_store: new.vector_store,
             metrics: new.metrics,
             logs_route: new.logs_route,
             edit_documents_by_function: new.edit_documents_by_function,
@@ -131,7 +145,6 @@ impl Aggregate for PatchExperimentalFeatureAnalytics {
     security(("Bearer" = ["experimental_features.update", "experimental_features.*", "*"])),
     responses(
         (status = OK, description = "Experimental features are returned", body = RuntimeTogglableFeatures, content_type = "application/json", example = json!(RuntimeTogglableFeatures {
-            vector_store: Some(true),
             metrics: Some(true),
             logs_route: Some(false),
             edit_documents_by_function: Some(false),
@@ -161,7 +174,6 @@ async fn patch_features(
 
     let old_features = features.runtime_features();
     let new_features = meilisearch_types::features::RuntimeTogglableFeatures {
-        vector_store: new_features.0.vector_store.unwrap_or(old_features.vector_store),
         metrics: new_features.0.metrics.unwrap_or(old_features.metrics),
         logs_route: new_features.0.logs_route.unwrap_or(old_features.logs_route),
         edit_documents_by_function: new_features
@@ -175,7 +187,6 @@ async fn patch_features(
     // the it renames to camelCase, which we don't want for analytics.
     // **Do not** ignore fields with `..` or `_` here, because we want to add them in the future.
     let meilisearch_types::features::RuntimeTogglableFeatures {
-        vector_store,
         metrics,
         logs_route,
         edit_documents_by_function,
@@ -184,7 +195,6 @@ async fn patch_features(
 
     analytics.publish(
         PatchExperimentalFeatureAnalytics {
-            vector_store,
             metrics,
             logs_route,
             edit_documents_by_function,
@@ -193,6 +203,7 @@ async fn patch_features(
         &req,
     );
     index_scheduler.put_runtime_features(new_features)?;
+    let new_features: RuntimeTogglableFeatures = new_features.into();
     debug!(returns = ?new_features, "Patch features");
     Ok(HttpResponse::Ok().json(new_features))
 }

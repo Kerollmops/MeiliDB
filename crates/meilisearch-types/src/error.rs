@@ -243,8 +243,9 @@ InvalidVectorsType                    , InvalidRequest       , BAD_REQUEST ;
 InvalidDocumentId                     , InvalidRequest       , BAD_REQUEST ;
 InvalidDocumentLimit                  , InvalidRequest       , BAD_REQUEST ;
 InvalidDocumentOffset                 , InvalidRequest       , BAD_REQUEST ;
-InvalidEmbedder                       , InvalidRequest       , BAD_REQUEST ;
-InvalidHybridQuery                    , InvalidRequest       , BAD_REQUEST ;
+InvalidSearchEmbedder                 , InvalidRequest       , BAD_REQUEST ;
+InvalidSimilarEmbedder                , InvalidRequest       , BAD_REQUEST ;
+InvalidSearchHybridQuery              , InvalidRequest       , BAD_REQUEST ;
 InvalidIndexLimit                     , InvalidRequest       , BAD_REQUEST ;
 InvalidIndexOffset                    , InvalidRequest       , BAD_REQUEST ;
 InvalidIndexPrimaryKey                , InvalidRequest       , BAD_REQUEST ;
@@ -443,7 +444,8 @@ impl ErrorCode for milli::Error {
                     UserError::InvalidMinTypoWordLenSetting(_, _) => {
                         Code::InvalidSettingsTypoTolerance
                     }
-                    UserError::InvalidEmbedder(_) => Code::InvalidEmbedder,
+                    UserError::InvalidSearchEmbedder(_) => Code::InvalidSearchEmbedder,
+                    UserError::InvalidSimilarEmbedder(_) => Code::InvalidSimilarEmbedder,
                     UserError::VectorEmbeddingError(_) | UserError::DocumentEmbeddingError(_) => {
                         Code::VectorEmbeddingError
                     }

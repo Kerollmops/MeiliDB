@@ -458,7 +458,7 @@ pub(crate) mod test {
     }
 
     fn create_test_features() -> RuntimeTogglableFeatures {
-        RuntimeTogglableFeatures { vector_store: true, ..Default::default() }
+        RuntimeTogglableFeatures::default()
     }
 
     #[test]

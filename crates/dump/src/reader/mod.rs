@@ -327,10 +327,7 @@ pub(crate) mod test {
             }
         }
 
-        assert_eq!(
-            dump.features().unwrap().unwrap(),
-            RuntimeTogglableFeatures { vector_store: true, ..Default::default() }
-        );
+        assert_eq!(dump.features().unwrap().unwrap(), RuntimeTogglableFeatures::default());
     }
 
     #[test]
@@ -373,10 +370,7 @@ pub(crate) mod test {
 
         assert_eq!(test.documents().unwrap().count(), 1);
 
-        assert_eq!(
-            dump.features().unwrap().unwrap(),
-            RuntimeTogglableFeatures { vector_store: true, ..Default::default() }
-        );
+        assert_eq!(dump.features().unwrap().unwrap(), RuntimeTogglableFeatures::default());
     }
 
     #[test]

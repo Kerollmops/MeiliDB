@@ -65,10 +65,9 @@ impl<'a> Similar<'a> {
         let universe = universe;
 
         let embedder_index =
-            self.index
-                .embedder_category_id
-                .get(self.rtxn, &self.embedder_name)?
-                .ok_or_else(|| crate::UserError::InvalidEmbedder(self.embedder_name.to_owned()))?;
+            self.index.embedder_category_id.get(self.rtxn, &self.embedder_name)?.ok_or_else(
+                || crate::UserError::InvalidSimilarEmbedder(self.embedder_name.to_owned()),
+            )?;
 
         let reader = ArroyWrapper::new(self.index.vector_arroy, embedder_index, self.quantized);
         let results = reader.nns_by_item(

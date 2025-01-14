@@ -106,7 +106,7 @@ pub struct SearchResults {
                     {
                         "id": 42,
                         "title": "Batman returns",
-                        "overview": "The overview of batman returns", 
+                        "overview": "The overview of batman returns",
                         "_federation": {
                             "indexUid": "movies",
                             "queriesPosition": 0
@@ -240,11 +240,9 @@ pub async fn multi_search_with_post(
                         index_scheduler.get_ref(),
                         index_uid_str.clone(),
                         &index,
-                        features,
                     )
                     .with_index(query_index)?;
-                    let retrieve_vector = RetrieveVectors::new(query.retrieve_vectors, features)
-                        .with_index(query_index)?;
+                    let retrieve_vector = RetrieveVectors::new(query.retrieve_vectors);
 
                     let search_result = tokio::task::spawn_blocking(move || {
                         perform_search(

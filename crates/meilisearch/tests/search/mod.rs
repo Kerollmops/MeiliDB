@@ -818,13 +818,6 @@ async fn test_score_details() {
                       "green",
                       "red"
                     ],
-                    "_vectors": {
-                      "manual": [
-                        -100,
-                        231,
-                        32
-                      ]
-                    },
                     "_rankingScoreDetails": {
                       "words": {
                         "order": 0,
@@ -1159,206 +1152,6 @@ async fn test_degraded_score_details() {
         .await;
 }
 
-#[actix_rt::test]
-async fn experimental_feature_vector_store() {
-    let server = Server::new().await;
-    let index = server.index("test");
-
-    let documents = DOCUMENTS.clone();
-
-    let (task, _status_code) = index.add_documents(json!(documents), None).await;
-    index.wait_task(task.uid()).await.succeeded();
-
-    let (response, code) = index
-        .search_post(json!({
-            "vector": [1.0, 2.0, 3.0],
-            "hybrid": {
-              "embedder": "manual",
-            },
-            "showRankingScore": true
-        }))
-        .await;
-
-    {
-        meili_snap::snapshot!(code, @"400 Bad Request");
-        meili_snap::snapshot!(meili_snap::json_string!(response), @r###"
-          {
-            "message": "Passing `vector` as a parameter requires enabling the `vector store` experimental feature. See https://github.com/meilisearch/product/discussions/677",
-            "code": "feature_not_enabled",
-            "type": "invalid_request",
-            "link": "https://docs.meilisearch.com/errors#feature_not_enabled"
-          }
-          "###);
-    }
-
-    index
-        .search(json!({
-            "retrieveVectors": true,
-            "showRankingScore": true
-        }), |response, code|{
-            meili_snap::snapshot!(code, @"400 Bad Request");
-            meili_snap::snapshot!(meili_snap::json_string!(response), @r###"
-            {
-              "message": "Passing `retrieveVectors` as a parameter requires enabling the `vector store` experimental feature. See https://github.com/meilisearch/product/discussions/677",
-              "code": "feature_not_enabled",
-              "type": "invalid_request",
-              "link": "https://docs.meilisearch.com/errors#feature_not_enabled"
-            }
-            "###);
-        })
-        .await;
-
-    let (response, code) = server.set_features(json!({"vectorStore": true})).await;
-    meili_snap::snapshot!(code, @"200 OK");
-    meili_snap::snapshot!(response["vectorStore"], @"true");
-
-    let (response, code) = index
-        .update_settings(json!({"embedders": {
-            "manual": {
-                "source": "userProvided",
-                "dimensions": 3,
-            }
-        }}))
-        .await;
-
-    meili_snap::snapshot!(response, @r###"
-    {
-      "taskUid": 1,
-      "indexUid": "test",
-      "status": "enqueued",
-      "type": "settingsUpdate",
-      "enqueuedAt": "[date]"
-    }
-    "###);
-    meili_snap::snapshot!(code, @"202 Accepted");
-    let response = index.wait_task(response.uid()).await;
-
-    meili_snap::snapshot!(meili_snap::json_string!(response["status"]), @"\"succeeded\"");
-
-    let (response, code) = index
-        .search_post(json!({
-            "vector": [1.0, 2.0, 3.0],
-            "hybrid": {
-              "embedder": "manual",
-            },
-            "showRankingScore": true,
-            "retrieveVectors": true,
-        }))
-        .await;
-
-    meili_snap::snapshot!(code, @"200 OK");
-    // vector search returns all documents that don't have vectors in the last bucket, like all sorts
-    meili_snap::snapshot!(meili_snap::json_string!(response["hits"]), @r###"
-    [
-      {
-        "title": "Shazam!",
-        "id": "287947",
-        "color": [
-          "green",
-          "blue"
-        ],
-        "_vectors": {
-          "manual": {
-            "embeddings": [
-              [
-                1.0,
-                2.0,
-                3.0
-              ]
-            ],
-            "regenerate": false
-          }
-        },
-        "_rankingScore": 1.0
-      },
-      {
-        "title": "Captain Marvel",
-        "id": "299537",
-        "color": [
-          "yellow",
-          "blue"
-        ],
-        "_vectors": {
-          "manual": {
-            "embeddings": [
-              [
-                1.0,
-                2.0,
-                54.0
-              ]
-            ],
-            "regenerate": false
-          }
-        },
-        "_rankingScore": 0.9129111766815186
-      },
-      {
-        "title": "Gläss",
-        "id": "450465",
-        "color": [
-          "blue",
-          "red"
-        ],
-        "_vectors": {
-          "manual": {
-            "embeddings": [
-              [
-                -100.0,
-                340.0,
-                90.0
-              ]
-            ],
-            "regenerate": false
-          }
-        },
-        "_rankingScore": 0.8106412887573242
-      },
-      {
-        "title": "How to Train Your Dragon: The Hidden World",
-        "id": "166428",
-        "color": [
-          "green",
-          "red"
-        ],
-        "_vectors": {
-          "manual": {
-            "embeddings": [
-              [
-                -100.0,
-                231.0,
-                32.0
-              ]
-            ],
-            "regenerate": false
-          }
-        },
-        "_rankingScore": 0.7412010431289673
-      },
-      {
-        "title": "Escape Room",
-        "id": "522681",
-        "color": [
-          "yellow",
-          "red"
-        ],
-        "_vectors": {
-          "manual": {
-            "embeddings": [
-              [
-                10.0,
-                -23.0,
-                32.0
-              ]
-            ],
-            "regenerate": false
-          }
-        },
-        "_rankingScore": 0.6972063183784485
-      }
-    ]
-    "###);
-}
-
 #[cfg(feature = "default")]
 #[actix_rt::test]
 async fn camelcased_words() {
@@ -1611,14 +1404,7 @@ async fn simple_search_with_strange_synonyms() {
                 "color": [
                   "green",
                   "red"
-                ],
-                "_vectors": {
-                  "manual": [
-                    -100,
-                    231,
-                    32
-                  ]
-                }
+                ]
               }
             ]
             "###);
@@ -1636,14 +1422,7 @@ async fn simple_search_with_strange_synonyms() {
                 "color": [
                   "green",
                   "red"
-                ],
-                "_vectors": {
-                  "manual": [
-                    -100,
-                    231,
-                    32
-                  ]
-                }
+                ]
               }
             ]
             "###);
@@ -1661,14 +1440,7 @@ async fn simple_search_with_strange_synonyms() {
                 "color": [
                   "green",
                   "red"
-                ],
-                "_vectors": {
-                  "manual": [
-                    -100,
-                    231,
-                    32
-                  ]
-                }
+                ]
               }
             ]
             "###);

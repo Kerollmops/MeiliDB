@@ -1,7 +1,7 @@
 use actix_web::web::Data;
 use actix_web::{web, HttpRequest, HttpResponse};
 use deserr::actix_web::{AwebJson, AwebQueryParameter};
-use index_scheduler::{IndexScheduler, RoFeatures};
+use index_scheduler::IndexScheduler;
 use meilisearch_types::deserr::query_params::Param;
 use meilisearch_types::deserr::{DeserrJsonError, DeserrQueryParamError};
 use meilisearch_types::error::deserr_codes::*;
@@ -121,7 +121,7 @@ pub struct SearchQueryGet {
     #[deserr(default, error = DeserrQueryParamError<InvalidSearchAttributesToSearchOn>)]
     #[param(value_type = Vec<String>, explode = false)]
     pub attributes_to_search_on: Option<CS<String>>,
-    #[deserr(default, error = DeserrQueryParamError<InvalidEmbedder>)]
+    #[deserr(default, error = DeserrQueryParamError<InvalidSearchEmbedder>)]
     pub hybrid_embedder: Option<String>,
     #[deserr(default, error = DeserrQueryParamError<InvalidSearchSemanticRatio>)]
     #[param(value_type = f32)]
@@ -185,7 +185,7 @@ impl TryFrom<SearchQueryGet> for SearchQuery {
             (None, Some(_)) => {
                 return Err(ResponseError::from_msg(
                     "`hybridEmbedder` is mandatory when `hybridSemanticRatio` is present".into(),
-                    meilisearch_types::error::Code::InvalidHybridQuery,
+                    meilisearch_types::error::Code::InvalidSearchHybridQuery,
                 ));
             }
             (Some(embedder), None) => {
@@ -336,11 +336,10 @@ pub async fn search_with_url_query(
     let mut aggregate = SearchAggregator::<SearchGET>::from_query(&query);
 
     let index = index_scheduler.index(&index_uid)?;
-    let features = index_scheduler.features();
 
     let search_kind =
-        search_kind(&query, index_scheduler.get_ref(), index_uid.to_string(), &index, features)?;
-    let retrieve_vector = RetrieveVectors::new(query.retrieve_vectors, features)?;
+        search_kind(&query, index_scheduler.get_ref(), index_uid.to_string(), &index)?;
+    let retrieve_vector = RetrieveVectors::new(query.retrieve_vectors);
     let permit = search_queue.try_get_search_permit().await?;
     let search_result = tokio::task::spawn_blocking(move || {
         perform_search(
@@ -444,11 +443,9 @@ pub async fn search_with_post(
 
     let index = index_scheduler.index(&index_uid)?;
 
-    let features = index_scheduler.features();
-
     let search_kind =
-        search_kind(&query, index_scheduler.get_ref(), index_uid.to_string(), &index, features)?;
-    let retrieve_vectors = RetrieveVectors::new(query.retrieve_vectors, features)?;
+        search_kind(&query, index_scheduler.get_ref(), index_uid.to_string(), &index)?;
+    let retrieve_vectors = RetrieveVectors::new(query.retrieve_vectors);
 
     let permit = search_queue.try_get_search_permit().await?;
     let search_result = tokio::task::spawn_blocking(move || {
@@ -483,15 +480,7 @@ pub fn search_kind(
     index_scheduler: &IndexScheduler,
     index_uid: String,
     index: &milli::Index,
-    features: RoFeatures,
 ) -> Result<SearchKind, ResponseError> {
-    if query.vector.is_some() {
-        features.check_vector("Passing `vector` as a parameter")?;
-    }
-    if query.hybrid.is_some() {
-        features.check_vector("Passing `hybrid` as a parameter")?;
-    }
-
     // handle with care, the order of cases matters, the semantics is subtle
     match (query.q.as_deref(), &query.hybrid, query.vector.as_deref()) {
         // empty query, no vector => placeholder search

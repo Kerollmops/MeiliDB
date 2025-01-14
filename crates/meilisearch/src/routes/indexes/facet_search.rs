@@ -56,7 +56,7 @@ pub struct FacetSearchQuery {
     pub q: Option<String>,
     #[deserr(default, error = DeserrJsonError<InvalidSearchVector>)]
     pub vector: Option<Vec<f32>>,
-    #[deserr(default, error = DeserrJsonError<InvalidHybridQuery>)]
+    #[deserr(default, error = DeserrJsonError<InvalidSearchHybridQuery>)]
     pub hybrid: Option<HybridQuery>,
     #[deserr(default, error = DeserrJsonError<InvalidSearchFilter>)]
     pub filter: Option<Value>,
@@ -252,9 +252,7 @@ pub async fn search(
     }
 
     let index = index_scheduler.index(&index_uid)?;
-    let features = index_scheduler.features();
-    let search_kind =
-        search_kind(&search_query, &index_scheduler, index_uid.to_string(), &index, features)?;
+    let search_kind = search_kind(&search_query, &index_scheduler, index_uid.to_string(), &index)?;
     let permit = search_queue.try_get_search_permit().await?;
     let search_result = tokio::task::spawn_blocking(move || {
         perform_facet_search(

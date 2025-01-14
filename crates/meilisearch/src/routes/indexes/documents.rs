@@ -257,8 +257,7 @@ pub async fn get_document(
     let GetDocument { fields, retrieve_vectors: param_retrieve_vectors } = params.into_inner();
     let attributes_to_retrieve = fields.merge_star_and_none();
 
-    let features = index_scheduler.features();
-    let retrieve_vectors = RetrieveVectors::new(param_retrieve_vectors.0, features)?;
+    let retrieve_vectors = RetrieveVectors::new(param_retrieve_vectors.0);
 
     analytics.publish(
         DocumentsFetchAggregator::<DocumentsGET> {
@@ -593,8 +592,7 @@ fn documents_by_query(
     let index_uid = IndexUid::try_from(index_uid.into_inner())?;
     let BrowseQuery { offset, limit, fields, retrieve_vectors, filter } = query;
 
-    let features = index_scheduler.features();
-    let retrieve_vectors = RetrieveVectors::new(retrieve_vectors, features)?;
+    let retrieve_vectors = RetrieveVectors::new(retrieve_vectors);
 
     let index = index_scheduler.index(&index_uid)?;
     let (total, documents) = retrieve_documents(
@@ -1420,7 +1418,6 @@ fn some_documents<'a, 't: 'a>(
         ret.map_err(ResponseError::from).and_then(|(key, document)| -> Result<_, ResponseError> {
             let mut document = milli::obkv_to_json(&all_fields, &fields_ids_map, document)?;
             match retrieve_vectors {
-                RetrieveVectors::Ignore => {}
                 RetrieveVectors::Hide => {
                     document.remove("_vectors");
                 }

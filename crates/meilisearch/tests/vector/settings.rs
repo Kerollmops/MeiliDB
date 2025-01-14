@@ -8,17 +8,6 @@ use crate::vector::generate_default_user_provided_documents;
 async fn field_unavailable_for_source() {
     let server = Server::new().await;
     let index = server.index("doggo");
-    let (value, code) = server.set_features(json!({"vectorStore": true})).await;
-    snapshot!(code, @"200 OK");
-    snapshot!(value, @r###"
-    {
-      "vectorStore": true,
-      "metrics": false,
-      "logsRoute": false,
-      "editDocumentsByFunction": false,
-      "containsFilter": false
-    }
-    "###);
 
     let (response, code) = index
         .update_settings(json!({
@@ -55,17 +44,6 @@ async fn field_unavailable_for_source() {
 async fn update_embedder() {
     let server = Server::new().await;
     let index = server.index("doggo");
-    let (value, code) = server.set_features(json!({"vectorStore": true})).await;
-    snapshot!(code, @"200 OK");
-    snapshot!(value, @r###"
-    {
-      "vectorStore": true,
-      "metrics": false,
-      "logsRoute": false,
-      "editDocumentsByFunction": false,
-      "containsFilter": false
-    }
-    "###);
 
     let (response, code) = index
         .update_settings(json!({
@@ -271,9 +249,9 @@ async fn reset_embedder_documents() {
     snapshot!(json_string!(documents), @r###"
     {
       "message": "Cannot find embedder with name `default`.",
-      "code": "invalid_embedder",
+      "code": "invalid_search_embedder",
       "type": "invalid_request",
-      "link": "https://docs.meilisearch.com/errors#invalid_embedder"
+      "link": "https://docs.meilisearch.com/errors#invalid_search_embedder"
     }
     "###);
 }

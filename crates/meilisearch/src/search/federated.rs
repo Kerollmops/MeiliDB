@@ -569,7 +569,7 @@ pub fn perform_federated_search(
 
             let res: Result<(), ResponseError> = (|| {
                 let search_kind =
-                    search_kind(&query, index_scheduler, index_uid.to_string(), &index, features)?;
+                    search_kind(&query, index_scheduler, index_uid.to_string(), &index)?;
 
                 let canonicalization_kind = match (&search_kind, &query.q) {
                     (SearchKind::SemanticOnly { .. }, _) => {
@@ -631,7 +631,7 @@ pub fn perform_federated_search(
                     _ => semantic_hit_count = Some(0),
                 }
 
-                let retrieve_vectors = RetrieveVectors::new(query.retrieve_vectors, features)?;
+                let retrieve_vectors = RetrieveVectors::new(query.retrieve_vectors);
 
                 let time_budget = match cutoff {
                     Some(cutoff) => TimeBudget::new(Duration::from_millis(cutoff)),

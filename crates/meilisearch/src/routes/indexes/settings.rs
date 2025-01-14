@@ -5,7 +5,6 @@ use index_scheduler::IndexScheduler;
 use meilisearch_types::deserr::DeserrJsonError;
 use meilisearch_types::error::ResponseError;
 use meilisearch_types::index_uid::IndexUid;
-use meilisearch_types::milli::update::Setting;
 use meilisearch_types::settings::{
     settings, SecretPolicy, SettingEmbeddingSettings, Settings, Unchecked,
 };
@@ -711,10 +710,7 @@ pub async fn delete_all(
 
 fn validate_settings(
     settings: Settings<Unchecked>,
-    index_scheduler: &IndexScheduler,
+    _index_scheduler: &IndexScheduler,
 ) -> Result<Settings<Unchecked>, ResponseError> {
-    if matches!(settings.embedders, Setting::Set(_)) {
-        index_scheduler.features().check_vector("Passing `embedders` in settings")?
-    }
     Ok(settings.validate()?)
 }

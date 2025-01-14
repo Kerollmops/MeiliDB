@@ -63,7 +63,7 @@ pub struct SearchQuery {
     pub q: Option<String>,
     #[deserr(default, error = DeserrJsonError<InvalidSearchVector>)]
     pub vector: Option<Vec<f32>>,
-    #[deserr(default, error = DeserrJsonError<InvalidHybridQuery>)]
+    #[deserr(default, error = DeserrJsonError<InvalidSearchHybridQuery>)]
     pub hybrid: Option<HybridQuery>,
     #[deserr(default = DEFAULT_SEARCH_OFFSET(), error = DeserrJsonError<InvalidSearchOffset>)]
     #[schema(default = DEFAULT_SEARCH_OFFSET)]
@@ -276,12 +276,12 @@ impl fmt::Debug for SearchQuery {
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Deserr, ToSchema)]
-#[deserr(error = DeserrJsonError<InvalidHybridQuery>, rename_all = camelCase, deny_unknown_fields)]
+#[deserr(error = DeserrJsonError<InvalidSearchHybridQuery>, rename_all = camelCase, deny_unknown_fields)]
 pub struct HybridQuery {
     #[deserr(default, error = DeserrJsonError<InvalidSearchSemanticRatio>, default)]
     #[schema(value_type = f32, default)]
     pub semantic_ratio: SemanticRatio,
-    #[deserr(error = DeserrJsonError<InvalidEmbedder>)]
+    #[deserr(error = DeserrJsonError<InvalidSearchEmbedder>)]
     pub embedder: String,
 }
 
@@ -300,8 +300,14 @@ impl SearchKind {
         embedder_name: &str,
         vector_len: Option<usize>,
     ) -> Result<Self, ResponseError> {
-        let (embedder_name, embedder, quantized) =
-            Self::embedder(index_scheduler, index_uid, index, embedder_name, vector_len)?;
+        let (embedder_name, embedder, quantized) = Self::embedder(
+            index_scheduler,
+            index_uid,
+            index,
+            embedder_name,
+            vector_len,
+            Route::Search,
+        )?;
         Ok(Self::SemanticOnly { embedder_name, embedder, quantized })
     }
 
@@ -313,8 +319,14 @@ impl SearchKind {
         semantic_ratio: f32,
         vector_len: Option<usize>,
     ) -> Result<Self, ResponseError> {
-        let (embedder_name, embedder, quantized) =
-            Self::embedder(index_scheduler, index_uid, index, embedder_name, vector_len)?;
+        let (embedder_name, embedder, quantized) = Self::embedder(
+            index_scheduler,
+            index_uid,
+            index,
+            embedder_name,
+            vector_len,
+            Route::Search,
+        )?;
         Ok(Self::Hybrid { embedder_name, embedder, quantized, semantic_ratio })
     }
 
@@ -324,13 +336,21 @@ impl SearchKind {
         index: &Index,
         embedder_name: &str,
         vector_len: Option<usize>,
+        route: Route,
     ) -> Result<(String, Arc<Embedder>, bool), ResponseError> {
         let embedder_configs = index.embedding_configs(&index.read_txn()?)?;
         let embedders = index_scheduler.embedders(index_uid, embedder_configs)?;
 
         let (embedder, _, quantized) = embedders
             .get(embedder_name)
-            .ok_or(milli::UserError::InvalidEmbedder(embedder_name.to_owned()))
+            .ok_or(match route {
+                Route::Search | Route::MultiSearch => {
+                    milli::UserError::InvalidSearchEmbedder(embedder_name.to_owned())
+                }
+                Route::Similar => {
+                    milli::UserError::InvalidSimilarEmbedder(embedder_name.to_owned())
+                }
+            })
             .map_err(milli::Error::from)?;
 
         if let Some(vector_len) = vector_len {
@@ -401,7 +421,7 @@ pub struct SearchQueryWithIndex {
     pub q: Option<String>,
     #[deserr(default, error = DeserrJsonError<InvalidSearchQ>)]
     pub vector: Option<Vec<f32>>,
-    #[deserr(default, error = DeserrJsonError<InvalidHybridQuery>)]
+    #[deserr(default, error = DeserrJsonError<InvalidSearchHybridQuery>)]
     pub hybrid: Option<HybridQuery>,
     #[deserr(default, error = DeserrJsonError<InvalidSearchOffset>)]
     pub offset: Option<usize>,
@@ -553,7 +573,7 @@ pub struct SimilarQuery {
     pub limit: usize,
     #[deserr(default, error = DeserrJsonError<InvalidSimilarFilter>)]
     pub filter: Option<Value>,
-    #[deserr(error = DeserrJsonError<InvalidEmbedder>)]
+    #[deserr(error = DeserrJsonError<InvalidSimilarEmbedder>)]
     pub embedder: String,
     #[deserr(default, error = DeserrJsonError<InvalidSimilarAttributesToRetrieve>)]
     pub attributes_to_retrieve: Option<BTreeSet<String>>,
@@ -1048,9 +1068,10 @@ pub struct ComputedFacets {
     pub stats: BTreeMap<String, FacetStats>,
 }
 
-enum Route {
+pub enum Route {
     Search,
     MultiSearch,
+    Similar,
 }
 
 fn compute_facet_distribution_stats<S: AsRef<str>>(
@@ -1141,10 +1162,6 @@ struct AttributesFormat {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum RetrieveVectors {
-    /// Do not touch the `_vectors` field
-    ///
-    /// this is the behavior when the vectorStore feature is disabled
-    Ignore,
     /// Remove the `_vectors` field
     ///
     /// this is the behavior when the vectorStore feature is enabled, and `retrieveVectors` is `false`
@@ -1156,15 +1173,11 @@ pub enum RetrieveVectors {
 }
 
 impl RetrieveVectors {
-    pub fn new(
-        retrieve_vector: bool,
-        features: index_scheduler::RoFeatures,
-    ) -> Result<Self, index_scheduler::Error> {
-        match (retrieve_vector, features.check_vector("Passing `retrieveVectors` as a parameter")) {
-            (true, Ok(())) => Ok(Self::Retrieve),
-            (true, Err(error)) => Err(error),
-            (false, Ok(())) => Ok(Self::Hide),
-            (false, Err(_)) => Ok(Self::Ignore),
+    pub fn new(retrieve_vector: bool) -> Self {
+        if retrieve_vector {
+            Self::Retrieve
+        } else {
+            Self::Hide
         }
     }
 }

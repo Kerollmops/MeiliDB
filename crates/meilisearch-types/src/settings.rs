@@ -866,7 +866,7 @@ pub fn settings(
             (name, SettingEmbeddingSettings { inner: Setting::Set(config.into()) })
         })
         .collect();
-    let embedders = if embedders.is_empty() { Setting::NotSet } else { Setting::Set(embedders) };
+    let embedders = Setting::Set(embedders);
 
     let search_cutoff_ms = index.search_cutoff(rtxn)?;
 

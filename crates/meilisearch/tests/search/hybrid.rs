@@ -11,19 +11,6 @@ async fn index_with_documents_user_provided<'a>(
 ) -> Index<'a> {
     let index = server.index("test");
 
-    let (response, code) = server.set_features(json!({"vectorStore": true})).await;
-
-    meili_snap::snapshot!(code, @"200 OK");
-    meili_snap::snapshot!(meili_snap::json_string!(response), @r###"
-    {
-      "vectorStore": true,
-      "metrics": false,
-      "logsRoute": false,
-      "editDocumentsByFunction": false,
-      "containsFilter": false
-    }
-    "###);
-
     let (response, code) = index
         .update_settings(json!({ "embedders": {"default": {
                 "source": "userProvided",
@@ -40,19 +27,6 @@ async fn index_with_documents_user_provided<'a>(
 
 async fn index_with_documents_hf<'a>(server: &'a Server, documents: &Value) -> Index<'a> {
     let index = server.index("test");
-
-    let (response, code) = server.set_features(json!({"vectorStore": true})).await;
-
-    meili_snap::snapshot!(code, @"200 OK");
-    meili_snap::snapshot!(meili_snap::json_string!(response), @r###"
-    {
-      "vectorStore": true,
-      "metrics": false,
-      "logsRoute": false,
-      "editDocumentsByFunction": false,
-      "containsFilter": false
-    }
-    "###);
 
     let (response, code) = index
         .update_settings(json!({ "embedders": {"default": {

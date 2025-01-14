@@ -7,7 +7,7 @@ use crate::json;
 /// Feature name to test against.
 /// This will have to be changed by a different one when that feature is stabilized.
 /// All tests that need to set a feature can make use of this constant.
-const FEATURE_NAME: &str = "vectorStore";
+const FEATURE_NAME: &str = "metrics";
 
 #[actix_rt::test]
 async fn experimental_features() {
@@ -18,7 +18,6 @@ async fn experimental_features() {
     meili_snap::snapshot!(code, @"200 OK");
     meili_snap::snapshot!(meili_snap::json_string!(response), @r###"
     {
-      "vectorStore": false,
       "metrics": false,
       "logsRoute": false,
       "editDocumentsByFunction": false,
@@ -31,8 +30,7 @@ async fn experimental_features() {
     meili_snap::snapshot!(code, @"200 OK");
     meili_snap::snapshot!(meili_snap::json_string!(response), @r###"
     {
-      "vectorStore": true,
-      "metrics": false,
+      "metrics": true,
       "logsRoute": false,
       "editDocumentsByFunction": false,
       "containsFilter": false
@@ -44,8 +42,7 @@ async fn experimental_features() {
     meili_snap::snapshot!(code, @"200 OK");
     meili_snap::snapshot!(meili_snap::json_string!(response), @r###"
     {
-      "vectorStore": true,
-      "metrics": false,
+      "metrics": true,
       "logsRoute": false,
       "editDocumentsByFunction": false,
       "containsFilter": false
@@ -58,8 +55,7 @@ async fn experimental_features() {
     meili_snap::snapshot!(code, @"200 OK");
     meili_snap::snapshot!(meili_snap::json_string!(response), @r###"
     {
-      "vectorStore": true,
-      "metrics": false,
+      "metrics": true,
       "logsRoute": false,
       "editDocumentsByFunction": false,
       "containsFilter": false
@@ -72,8 +68,7 @@ async fn experimental_features() {
     meili_snap::snapshot!(code, @"200 OK");
     meili_snap::snapshot!(meili_snap::json_string!(response), @r###"
     {
-      "vectorStore": true,
-      "metrics": false,
+      "metrics": true,
       "logsRoute": false,
       "editDocumentsByFunction": false,
       "containsFilter": false
@@ -93,7 +88,6 @@ async fn experimental_feature_metrics() {
     meili_snap::snapshot!(code, @"200 OK");
     meili_snap::snapshot!(meili_snap::json_string!(response), @r###"
     {
-      "vectorStore": false,
       "metrics": true,
       "logsRoute": false,
       "editDocumentsByFunction": false,
@@ -152,7 +146,7 @@ async fn errors() {
     meili_snap::snapshot!(code, @"400 Bad Request");
     meili_snap::snapshot!(meili_snap::json_string!(response), @r###"
     {
-      "message": "Unknown field `NotAFeature`: expected one of `vectorStore`, `metrics`, `logsRoute`, `editDocumentsByFunction`, `containsFilter`",
+      "message": "Unknown field `NotAFeature`: expected one of `metrics`, `logsRoute`, `editDocumentsByFunction`, `containsFilter`",
       "code": "bad_request",
       "type": "invalid_request",
       "link": "https://docs.meilisearch.com/errors#bad_request"
@@ -165,7 +159,7 @@ async fn errors() {
     meili_snap::snapshot!(code, @"400 Bad Request");
     meili_snap::snapshot!(meili_snap::json_string!(response), @r###"
     {
-      "message": "Invalid value type at `.vectorStore`: expected a boolean, but found a positive integer: `42`",
+      "message": "Invalid value type at `.metrics`: expected a boolean, but found a positive integer: `42`",
       "code": "bad_request",
       "type": "invalid_request",
       "link": "https://docs.meilisearch.com/errors#bad_request"
@@ -178,7 +172,7 @@ async fn errors() {
     meili_snap::snapshot!(code, @"400 Bad Request");
     meili_snap::snapshot!(meili_snap::json_string!(response), @r###"
     {
-      "message": "Invalid value type at `.vectorStore`: expected a boolean, but found a string: `\"true\"`",
+      "message": "Invalid value type at `.metrics`: expected a boolean, but found a string: `\"true\"`",
       "code": "bad_request",
       "type": "invalid_request",
       "link": "https://docs.meilisearch.com/errors#bad_request"
