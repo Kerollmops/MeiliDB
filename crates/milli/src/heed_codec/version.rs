@@ -8,8 +8,7 @@ const VERSION_SIZE: usize = std::mem::size_of::<u32>() * 3;
 
 #[derive(thiserror::Error, Debug)]
 #[error(
-    "Could not decode the version: Expected {} bytes but instead received {0} bytes",
-    VERSION_SIZE
+    "Could not decode the version: Expected {VERSION_SIZE} bytes but instead received {0} bytes"
 )]
 pub struct DecodeVersionError(usize);
 

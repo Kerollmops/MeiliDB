@@ -2,7 +2,6 @@ use meilisearch_types::{
     milli,
     milli::progress::{Progress, VariableNameStep},
     tasks::{KindWithContent, Status, Task},
-    versioning::{VERSION_MAJOR, VERSION_MINOR, VERSION_PATCH},
 };
 
 use crate::{processing::UpgradeDatabaseProgress, Error, IndexScheduler, Result};
@@ -30,7 +29,8 @@ impl IndexScheduler {
                 indexes.len() as u32,
             ));
             let index = self.index(uid)?;
-            milli::update::upgrade::upgrade(&index, from, progress.clone());
+            milli::update::upgrade::upgrade(&index, from, progress.clone())
+                .map_err(|e| Error::from_milli(e, Some(uid.to_string())))?;
         }
 
         for task in tasks.iter_mut() {
