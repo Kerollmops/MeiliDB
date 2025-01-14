@@ -553,7 +553,7 @@ fn resolve_sort_criteria<'ctx, Query: RankingRuleQueryTrait>(
     Ok(())
 }
 
-#[tracing::instrument(level = "trace", skip_all, target = "search::universe")]
+#[tracing::instrument(level = "debug", skip_all, target = "search::universe")]
 pub fn filtered_universe(
     index: &Index,
     txn: &RoTxn<'_>,
