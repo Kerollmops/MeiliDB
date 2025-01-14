@@ -114,6 +114,8 @@ pub struct DetailsView {
     pub settings: Option<Box<Settings<Unchecked>>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub swaps: Option<Vec<IndexSwap>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub upgrade_from: Option<String>,
 }
 
 impl DetailsView {
@@ -234,6 +236,11 @@ impl DetailsView {
                     Some(left)
                 }
             },
+            upgrade_from: match (self.upgrade_from.clone(), other.upgrade_from.clone()) {
+                (None, None) => None,
+                (None, Some(from)) | (Some(from), None) => Some(from),
+                (Some(_), Some(from)) => Some(from),
+            },
         }
     }
 }
@@ -311,6 +318,10 @@ impl From<Details> for DetailsView {
             Details::IndexSwap { swaps } => {
                 DetailsView { swaps: Some(swaps), ..Default::default() }
             }
+            Details::UpgradeDatabase { from } => DetailsView {
+                upgrade_from: Some(format!("v{}.{}.{}", from.0, from.1, from.2)),
+                ..Default::default()
+            },
         }
     }
 }

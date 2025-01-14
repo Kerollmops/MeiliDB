@@ -10,6 +10,7 @@ mod roaring_bitmap_length;
 mod str_beu32_codec;
 mod str_ref;
 mod str_str_u8_codec;
+pub mod version;
 
 pub use byte_slice_ref::BytesRefCodec;
 use heed::BoxedError;

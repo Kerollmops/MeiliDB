@@ -10,7 +10,7 @@ use roaring::RoaringBitmap;
 use rstar::RTree;
 use serde::{Deserialize, Serialize};
 
-use crate::constants::RESERVED_VECTORS_FIELD_NAME;
+use crate::constants::{self, RESERVED_VECTORS_FIELD_NAME};
 use crate::documents::PrimaryKey;
 use crate::error::{InternalError, UserError};
 use crate::fields_ids_map::FieldsIdsMap;
@@ -18,6 +18,7 @@ use crate::heed_codec::facet::{
     FacetGroupKeyCodec, FacetGroupValueCodec, FieldDocIdFacetF64Codec, FieldDocIdFacetStringCodec,
     FieldIdCodec, OrderedF64Codec,
 };
+use crate::heed_codec::version::VersionCodec;
 use crate::heed_codec::{BEU16StrCodec, FstSetCodec, StrBEU16Codec, StrRefCodec};
 use crate::order_by_map::OrderByMap;
 use crate::proximity::ProximityPrecision;
@@ -33,6 +34,7 @@ pub const DEFAULT_MIN_WORD_LEN_ONE_TYPO: u8 = 5;
 pub const DEFAULT_MIN_WORD_LEN_TWO_TYPOS: u8 = 9;
 
 pub mod main_key {
+    pub const VERSION_KEY: &str = "version";
     pub const CRITERIA_KEY: &str = "criteria";
     pub const DISPLAYED_FIELDS_KEY: &str = "displayed-fields";
     pub const DISTINCT_FIELD_KEY: &str = "distinct-field-key";
@@ -223,12 +225,9 @@ impl Index {
         let vector_arroy = env.create_database(&mut wtxn, Some(VECTOR_ARROY))?;
 
         let documents = env.create_database(&mut wtxn, Some(DOCUMENTS))?;
-        wtxn.commit()?;
 
-        Index::set_creation_dates(&env, main, created_at, updated_at)?;
-
-        Ok(Index {
-            env,
+        let this = Index {
+            env: env.clone(),
             main,
             external_documents_ids,
             word_docids,
@@ -253,7 +252,22 @@ impl Index {
             vector_arroy,
             embedder_category_id,
             documents,
-        })
+        };
+        if this.get_version(&wtxn)?.is_none() {
+            this.put_version(
+                &mut wtxn,
+                (
+                    constants::VERSION_MAJOR.parse().unwrap(),
+                    constants::VERSION_MINOR.parse().unwrap(),
+                    constants::VERSION_PATCH.parse().unwrap(),
+                ),
+            )?;
+        }
+        wtxn.commit()?;
+
+        Index::set_creation_dates(&this.env, this.main, created_at, updated_at)?;
+
+        Ok(this)
     }
 
     pub fn new<P: AsRef<Path>>(options: heed::EnvOpenOptions, path: P) -> Result<Index> {
@@ -329,6 +343,26 @@ impl Index {
     /// when all references are dropped, the last one will eventually close the environment.
     pub fn prepare_for_closing(self) -> heed::EnvClosingEvent {
         self.env.prepare_for_closing()
+    }
+
+    /* version */
+
+    /// Writes the version of the database.
+    pub(crate) fn put_version(
+        &self,
+        wtxn: &mut RwTxn<'_>,
+        (major, minor, patch): (u32, u32, u32),
+    ) -> heed::Result<()> {
+        self.main.remap_types::<Str, VersionCodec>().put(
+            wtxn,
+            main_key::VERSION_KEY,
+            &(major, minor, patch),
+        )
+    }
+
+    /// Get the version of the database. `None` if it was never set.
+    pub(crate) fn get_version(&self, rtxn: &RoTxn<'_>) -> heed::Result<Option<(u32, u32, u32)>> {
+        self.main.remap_types::<Str, VersionCodec>().get(rtxn, main_key::VERSION_KEY)
     }
 
     /* documents ids */

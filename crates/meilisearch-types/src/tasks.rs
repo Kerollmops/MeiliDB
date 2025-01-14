@@ -50,6 +50,7 @@ impl Task {
             | SnapshotCreation
             | TaskCancelation { .. }
             | TaskDeletion { .. }
+            | UpgradeDatabase { .. }
             | IndexSwap { .. } => None,
             DocumentAdditionOrUpdate { index_uid, .. }
             | DocumentEdition { index_uid, .. }
@@ -84,7 +85,8 @@ impl Task {
             | KindWithContent::TaskCancelation { .. }
             | KindWithContent::TaskDeletion { .. }
             | KindWithContent::DumpCreation { .. }
-            | KindWithContent::SnapshotCreation => None,
+            | KindWithContent::SnapshotCreation
+            | KindWithContent::UpgradeDatabase { .. } => None,
         }
     }
 }
@@ -150,6 +152,9 @@ pub enum KindWithContent {
         instance_uid: Option<InstanceUid>,
     },
     SnapshotCreation,
+    UpgradeDatabase {
+        from: (u32, u32, u32),
+    },
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
@@ -175,6 +180,7 @@ impl KindWithContent {
             KindWithContent::TaskDeletion { .. } => Kind::TaskDeletion,
             KindWithContent::DumpCreation { .. } => Kind::DumpCreation,
             KindWithContent::SnapshotCreation => Kind::SnapshotCreation,
+            KindWithContent::UpgradeDatabase { .. } => Kind::UpgradeDatabase,
         }
     }
 
@@ -185,7 +191,8 @@ impl KindWithContent {
             DumpCreation { .. }
             | SnapshotCreation
             | TaskCancelation { .. }
-            | TaskDeletion { .. } => vec![],
+            | TaskDeletion { .. }
+            | UpgradeDatabase { .. } => vec![],
             DocumentAdditionOrUpdate { index_uid, .. }
             | DocumentEdition { index_uid, .. }
             | DocumentDeletion { index_uid, .. }
@@ -262,6 +269,7 @@ impl KindWithContent {
             }),
             KindWithContent::DumpCreation { .. } => Some(Details::Dump { dump_uid: None }),
             KindWithContent::SnapshotCreation => None,
+            KindWithContent::UpgradeDatabase { .. } => None,
         }
     }
 
@@ -320,6 +328,7 @@ impl KindWithContent {
             }),
             KindWithContent::DumpCreation { .. } => Some(Details::Dump { dump_uid: None }),
             KindWithContent::SnapshotCreation => None,
+            KindWithContent::UpgradeDatabase { .. } => None,
         }
     }
 }
@@ -360,6 +369,7 @@ impl From<&KindWithContent> for Option<Details> {
             }),
             KindWithContent::DumpCreation { .. } => Some(Details::Dump { dump_uid: None }),
             KindWithContent::SnapshotCreation => None,
+            KindWithContent::UpgradeDatabase { .. } => None,
         }
     }
 }
@@ -468,6 +478,7 @@ pub enum Kind {
     TaskDeletion,
     DumpCreation,
     SnapshotCreation,
+    UpgradeDatabase,
 }
 
 impl Kind {
@@ -484,6 +495,7 @@ impl Kind {
             | Kind::TaskCancelation
             | Kind::TaskDeletion
             | Kind::DumpCreation
+            | Kind::UpgradeDatabase
             | Kind::SnapshotCreation => false,
         }
     }
@@ -503,6 +515,7 @@ impl Display for Kind {
             Kind::TaskDeletion => write!(f, "taskDeletion"),
             Kind::DumpCreation => write!(f, "dumpCreation"),
             Kind::SnapshotCreation => write!(f, "snapshotCreation"),
+            Kind::UpgradeDatabase => write!(f, "upgradeDatabase"),
         }
     }
 }
@@ -607,6 +620,9 @@ pub enum Details {
     IndexSwap {
         swaps: Vec<IndexSwap>,
     },
+    UpgradeDatabase {
+        from: (usize, usize, usize),
+    },
 }
 
 impl Details {
@@ -627,6 +643,7 @@ impl Details {
             Self::SettingsUpdate { .. }
             | Self::IndexInfo { .. }
             | Self::Dump { .. }
+            | Self::UpgradeDatabase { .. }
             | Self::IndexSwap { .. } => (),
         }
 

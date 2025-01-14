@@ -279,6 +279,9 @@ fn snapshot_details(d: &Details) -> String {
         Details::IndexSwap { swaps } => {
             format!("{{ swaps: {swaps:?} }}")
         }
+        Details::UpgradeDatabase { from } => {
+            format!("{{ from: v{}.{}.{} }}", from.0, from.1, from.2)
+        }
     }
 }
 

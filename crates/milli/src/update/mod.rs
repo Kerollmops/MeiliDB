@@ -21,6 +21,7 @@ mod indexer_config;
 pub mod new;
 pub(crate) mod settings;
 mod update_step;
+pub mod upgrade;
 mod word_prefix_docids;
 mod words_prefix_integer_docids;
 mod words_prefixes_fst;

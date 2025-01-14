@@ -5,16 +5,14 @@ use std::sync::atomic::Ordering;
 use dump::IndexMetadata;
 use meilisearch_types::milli::constants::RESERVED_VECTORS_FIELD_NAME;
 use meilisearch_types::milli::documents::{obkv_to_object, DocumentsBatchReader};
-use meilisearch_types::milli::progress::Progress;
+use meilisearch_types::milli::progress::{Progress, VariableNameStep};
 use meilisearch_types::milli::vector::parsed_vectors::{ExplicitVectors, VectorOrArrayOfVectors};
 use meilisearch_types::milli::{self};
 use meilisearch_types::tasks::{Details, KindWithContent, Status, Task};
 use time::macros::format_description;
 use time::OffsetDateTime;
 
-use crate::processing::{
-    AtomicDocumentStep, AtomicTaskStep, DumpCreationProgress, VariableNameStep,
-};
+use crate::processing::{AtomicDocumentStep, AtomicTaskStep, DumpCreationProgress};
 use crate::{Error, IndexScheduler, Result};
 
 impl IndexScheduler {
@@ -106,8 +104,12 @@ impl IndexScheduler {
         progress.update_progress(DumpCreationProgress::DumpTheIndexes);
         let nb_indexes = self.index_mapper.index_mapping.len(&rtxn)? as u32;
         let mut count = 0;
-        let () = self.index_mapper.try_for_each_index(&rtxn, |uid, index| -> Result<()> {
-            progress.update_progress(VariableNameStep::new(uid.to_string(), count, nb_indexes));
+        self.index_mapper.try_for_each_index(&rtxn, |uid, index| -> Result<()> {
+            progress.update_progress(VariableNameStep::<DumpCreationProgress>::new(
+                uid.to_string(),
+                count,
+                nb_indexes,
+            ));
             count += 1;
 
             let rtxn = index.read_txn()?;

@@ -32,13 +32,16 @@ use analytics::Analytics;
 use anyhow::bail;
 use error::PayloadError;
 use extractors::payload::PayloadConfig;
+use index_scheduler::upgrade::upgrade_task_queue;
 use index_scheduler::{IndexScheduler, IndexSchedulerOptions};
 use meilisearch_auth::AuthController;
 use meilisearch_types::milli::documents::{DocumentsBatchBuilder, DocumentsBatchReader};
 use meilisearch_types::milli::update::{IndexDocumentsConfig, IndexDocumentsMethod};
 use meilisearch_types::settings::apply_settings_to_builder;
 use meilisearch_types::tasks::KindWithContent;
-use meilisearch_types::versioning::{check_version_file, create_current_version_file};
+use meilisearch_types::versioning::{
+    create_current_version_file, get_version, VersionFileError, VERSION_MAJOR, VERSION_MINOR,
+};
 use meilisearch_types::{compression, milli, VERSION_FILE_NAME};
 pub use option::Opt;
 use option::ScheduleSnapshot;
@@ -316,6 +319,7 @@ fn open_or_create_database_unchecked(
             index_growth_amount: byte_unit::Byte::from_str("10GiB").unwrap().as_u64() as usize,
             index_count: DEFAULT_INDEX_COUNT,
             instance_features,
+            auto_upgrade: opt.experimental_dumpless_upgrade,
         })?)
     };
 
@@ -334,13 +338,36 @@ fn open_or_create_database_unchecked(
     }
 }
 
+/// Ensures Meilisearch version is compatible with the database, returns an error versions mismatch.
+fn check_version_and_update_task_queue(
+    db_path: &Path,
+    experimental_dumpless_upgrade: bool,
+) -> anyhow::Result<()> {
+    let (major, minor, patch) = get_version(db_path)?;
+
+    if major != VERSION_MAJOR || minor != VERSION_MINOR {
+        if experimental_dumpless_upgrade {
+            let version = (
+                major.parse().map_err(|_| VersionFileError::MalformedVersionFile)?,
+                minor.parse().map_err(|_| VersionFileError::MalformedVersionFile)?,
+                patch.parse().map_err(|_| VersionFileError::MalformedVersionFile)?,
+            );
+            return upgrade_task_queue(&db_path.join("tasks"), version);
+        } else {
+            return Err(VersionFileError::VersionMismatch { major, minor, patch }.into());
+        }
+    }
+
+    Ok(())
+}
+
 /// Ensure you're in a valid state and open the IndexScheduler + AuthController for you.
 fn open_or_create_database(
     opt: &Opt,
     empty_db: bool,
 ) -> anyhow::Result<(IndexScheduler, AuthController)> {
     if !empty_db {
-        check_version_file(&opt.db_path)?;
+        check_version_and_update_task_queue(&opt.db_path, opt.experimental_dumpless_upgrade)?;
     }
 
     open_or_create_database_unchecked(opt, OnFailure::KeepDb)

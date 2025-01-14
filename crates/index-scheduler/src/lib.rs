@@ -30,6 +30,7 @@ mod queue;
 mod scheduler;
 #[cfg(test)]
 mod test_utils;
+pub mod upgrade;
 mod utils;
 pub mod uuid_codec;
 
@@ -120,6 +121,8 @@ pub struct IndexSchedulerOptions {
     pub batched_tasks_size_limit: u64,
     /// The experimental features enabled for this instance.
     pub instance_features: InstanceTogglableFeatures,
+    /// The experimental features enabled for this instance.
+    pub auto_upgrade: bool,
 }
 
 /// Structure which holds meilisearch's indexes and schedules the tasks

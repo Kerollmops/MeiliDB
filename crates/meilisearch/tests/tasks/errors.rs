@@ -95,36 +95,36 @@ async fn task_bad_types() {
 
     let (response, code) = server.tasks_filter("types=doggo").await;
     snapshot!(code, @"400 Bad Request");
-    snapshot!(json_string!(response), @r###"
+    snapshot!(json_string!(response), @r#"
     {
-      "message": "Invalid value in parameter `types`: `doggo` is not a valid task type. Available types are `documentAdditionOrUpdate`, `documentEdition`, `documentDeletion`, `settingsUpdate`, `indexCreation`, `indexDeletion`, `indexUpdate`, `indexSwap`, `taskCancelation`, `taskDeletion`, `dumpCreation`, `snapshotCreation`.",
+      "message": "Invalid value in parameter `types`: `doggo` is not a valid task type. Available types are `documentAdditionOrUpdate`, `documentEdition`, `documentDeletion`, `settingsUpdate`, `indexCreation`, `indexDeletion`, `indexUpdate`, `indexSwap`, `taskCancelation`, `taskDeletion`, `dumpCreation`, `snapshotCreation`, `upgradeDatabase`.",
       "code": "invalid_task_types",
       "type": "invalid_request",
       "link": "https://docs.meilisearch.com/errors#invalid_task_types"
     }
-    "###);
+    "#);
 
     let (response, code) = server.cancel_tasks("types=doggo").await;
     snapshot!(code, @"400 Bad Request");
-    snapshot!(json_string!(response), @r###"
+    snapshot!(json_string!(response), @r#"
     {
-      "message": "Invalid value in parameter `types`: `doggo` is not a valid task type. Available types are `documentAdditionOrUpdate`, `documentEdition`, `documentDeletion`, `settingsUpdate`, `indexCreation`, `indexDeletion`, `indexUpdate`, `indexSwap`, `taskCancelation`, `taskDeletion`, `dumpCreation`, `snapshotCreation`.",
+      "message": "Invalid value in parameter `types`: `doggo` is not a valid task type. Available types are `documentAdditionOrUpdate`, `documentEdition`, `documentDeletion`, `settingsUpdate`, `indexCreation`, `indexDeletion`, `indexUpdate`, `indexSwap`, `taskCancelation`, `taskDeletion`, `dumpCreation`, `snapshotCreation`, `upgradeDatabase`.",
       "code": "invalid_task_types",
       "type": "invalid_request",
       "link": "https://docs.meilisearch.com/errors#invalid_task_types"
     }
-    "###);
+    "#);
 
     let (response, code) = server.delete_tasks("types=doggo").await;
     snapshot!(code, @"400 Bad Request");
-    snapshot!(json_string!(response), @r###"
+    snapshot!(json_string!(response), @r#"
     {
-      "message": "Invalid value in parameter `types`: `doggo` is not a valid task type. Available types are `documentAdditionOrUpdate`, `documentEdition`, `documentDeletion`, `settingsUpdate`, `indexCreation`, `indexDeletion`, `indexUpdate`, `indexSwap`, `taskCancelation`, `taskDeletion`, `dumpCreation`, `snapshotCreation`.",
+      "message": "Invalid value in parameter `types`: `doggo` is not a valid task type. Available types are `documentAdditionOrUpdate`, `documentEdition`, `documentDeletion`, `settingsUpdate`, `indexCreation`, `indexDeletion`, `indexUpdate`, `indexSwap`, `taskCancelation`, `taskDeletion`, `dumpCreation`, `snapshotCreation`, `upgradeDatabase`.",
       "code": "invalid_task_types",
       "type": "invalid_request",
       "link": "https://docs.meilisearch.com/errors#invalid_task_types"
     }
-    "###);
+    "#);
 }
 
 #[actix_rt::test]

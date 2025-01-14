@@ -20,8 +20,8 @@ use time::format_description::well_known::Rfc3339;
 use time::OffsetDateTime;
 use uuid::Uuid;
 
-use self::batches::BatchQueue;
-use self::tasks::TaskQueue;
+pub(crate) use self::batches::BatchQueue;
+pub(crate) use self::tasks::TaskQueue;
 use crate::processing::ProcessingTasks;
 use crate::utils::{
     check_index_swap_validity, filter_out_references_to_newer_tasks, ProcessingBatch,

@@ -370,7 +370,8 @@ VectorEmbeddingError                  , InvalidRequest       , BAD_REQUEST ;
 NotFoundSimilarId                     , InvalidRequest       , BAD_REQUEST ;
 InvalidDocumentEditionContext         , InvalidRequest       , BAD_REQUEST ;
 InvalidDocumentEditionFunctionFilter  , InvalidRequest       , BAD_REQUEST ;
-EditDocumentsByFunctionError          , InvalidRequest       , BAD_REQUEST
+EditDocumentsByFunctionError          , InvalidRequest       , BAD_REQUEST ;
+CouldNotUpgrade                       , InvalidRequest       , BAD_REQUEST
 }
 
 impl ErrorCode for JoinError {
@@ -453,6 +454,9 @@ impl ErrorCode for milli::Error {
                     | UserError::DocumentEditionCompilationError(_) => {
                         Code::EditDocumentsByFunctionError
                     }
+                    UserError::TooOldForUpgrade(_, _, _)
+                    | UserError::CannotDowngrade(_, _, _)
+                    | UserError::CannotUpgradeToUnknownVersion(_, _, _) => Code::CouldNotUpgrade,
                 }
             }
         }

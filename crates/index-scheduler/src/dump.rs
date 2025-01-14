@@ -132,6 +132,7 @@ impl<'a> Dump<'a> {
                     KindWithContent::DumpCreation { keys, instance_uid }
                 }
                 KindDump::SnapshotCreation => KindWithContent::SnapshotCreation,
+                KindDump::UpgradeDatabase { from } => KindWithContent::UpgradeDatabase { from },
             },
         };
 

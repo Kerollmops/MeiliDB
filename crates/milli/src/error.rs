@@ -10,7 +10,7 @@ use rhai::EvalAltResult;
 use serde_json::Value;
 use thiserror::Error;
 
-use crate::constants::RESERVED_GEO_FIELD_NAME;
+use crate::constants::{RESERVED_GEO_FIELD_NAME, VERSION_MAJOR, VERSION_MINOR, VERSION_PATCH};
 use crate::documents::{self, DocumentsBatchCursorError};
 use crate::thread_pool_no_abort::PanicCatched;
 use crate::{CriterionError, DocumentId, FieldId, Object, SortError};
@@ -286,6 +286,12 @@ and can not be more than 511 bytes.", .document_id.to_string()
     DocumentEditionCompilationError(rhai::ParseError),
     #[error("{0}")]
     DocumentEmbeddingError(String),
+    #[error("Upgrade could not be processed because v{0}.{1}.{2} of the database is too old. Please re-open the v{0}.{1}.{2} and use a dump to upgrade your version. The oldest version meilisearch can upgrade from is v1.12.0.")]
+    TooOldForUpgrade(u32, u32, u32),
+    #[error("Upgrade could not be processed because the database version (v{0}.{1}.{2}) is newer than the targeted version (v{}.{}.{})", VERSION_MAJOR, VERSION_MINOR, VERSION_PATCH)]
+    CannotDowngrade(u32, u32, u32),
+    #[error("Cannot upgrade to unknown version v{0}.{1}.{2}.")]
+    CannotUpgradeToUnknownVersion(u32, u32, u32),
 }
 
 impl From<crate::vector::Error> for Error {

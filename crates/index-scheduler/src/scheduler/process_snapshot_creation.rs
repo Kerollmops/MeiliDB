@@ -3,12 +3,12 @@ use std::fs;
 use std::sync::atomic::Ordering;
 
 use meilisearch_types::heed::CompactionOption;
-use meilisearch_types::milli::progress::Progress;
+use meilisearch_types::milli::progress::{Progress, VariableNameStep};
 use meilisearch_types::milli::{self};
 use meilisearch_types::tasks::{Status, Task};
 use meilisearch_types::{compression, VERSION_FILE_NAME};
 
-use crate::processing::{AtomicUpdateFileStep, SnapshotCreationProgress, VariableNameStep};
+use crate::processing::{AtomicUpdateFileStep, SnapshotCreationProgress};
 use crate::{Error, IndexScheduler, Result};
 
 impl IndexScheduler {
@@ -74,7 +74,9 @@ impl IndexScheduler {
 
         for (i, result) in index_mapping.iter(&rtxn)?.enumerate() {
             let (name, uuid) = result?;
-            progress.update_progress(VariableNameStep::new(name, i as u32, nb_indexes));
+            progress.update_progress(VariableNameStep::<SnapshotCreationProgress>::new(
+                name, i as u32, nb_indexes,
+            ));
             let index = self.index_mapper.index(&rtxn, name)?;
             let dst = temp_snapshot_dir.path().join("indexes").join(uuid.to_string());
             fs::create_dir_all(&dst)?;

@@ -1,5 +1,6 @@
 use std::any::TypeId;
 use std::borrow::Cow;
+use std::marker::PhantomData;
 use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::{Arc, RwLock};
 
@@ -152,4 +153,42 @@ pub struct ProgressStepView {
     pub current_step: Cow<'static, str>,
     pub finished: u32,
     pub total: u32,
+}
+
+/// Used when the name can change but it's still the same step.
+/// To avoid conflicts on the `TypeId`, create a unique type every time you use this step:
+/// ```text
+/// enum UpgradeVersion {}    
+///
+/// progress.update_progress(VariableNameStep::<UpgradeVersion>::new(
+///     "v1 to v2",
+///     0,
+///     10,
+/// ));
+/// ```
+pub struct VariableNameStep<U: Send + Sync + 'static> {
+    name: String,
+    current: u32,
+    total: u32,
+    phantom: PhantomData<U>,
+}
+
+impl<U: Send + Sync + 'static> VariableNameStep<U> {
+    pub fn new(name: impl Into<String>, current: u32, total: u32) -> Self {
+        Self { name: name.into(), current, total, phantom: PhantomData }
+    }
+}
+
+impl<U: Send + Sync + 'static> Step for VariableNameStep<U> {
+    fn name(&self) -> Cow<'static, str> {
+        self.name.clone().into()
+    }
+
+    fn current(&self) -> u32 {
+        self.current
+    }
+
+    fn total(&self) -> u32 {
+        self.total
+    }
 }

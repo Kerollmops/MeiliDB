@@ -3,7 +3,7 @@ use std::sync::atomic::Ordering;
 
 use meilisearch_types::batches::BatchId;
 use meilisearch_types::heed::{RoTxn, RwTxn};
-use meilisearch_types::milli::progress::Progress;
+use meilisearch_types::milli::progress::{Progress, VariableNameStep};
 use meilisearch_types::milli::{self};
 use meilisearch_types::tasks::{Details, IndexSwap, KindWithContent, Status, Task};
 use milli::update::Settings as MilliSettings;
@@ -13,7 +13,7 @@ use super::create_batch::Batch;
 use crate::processing::{
     AtomicBatchStep, AtomicTaskStep, CreateIndexProgress, DeleteIndexProgress,
     InnerSwappingTwoIndexes, SwappingTheIndexes, TaskCancelationProgress, TaskDeletionProgress,
-    UpdateIndexProgress, VariableNameStep,
+    UpdateIndexProgress,
 };
 use crate::utils::{self, swap_index_uid_in_task, ProcessingBatch};
 use crate::{Error, IndexScheduler, Result, TaskId};
@@ -297,7 +297,7 @@ impl IndexScheduler {
                 }
                 progress.update_progress(SwappingTheIndexes::SwappingTheIndexes);
                 for (step, swap) in swaps.iter().enumerate() {
-                    progress.update_progress(VariableNameStep::new(
+                    progress.update_progress(VariableNameStep::<SwappingTheIndexes>::new(
                         format!("swapping index {} and {}", swap.indexes.0, swap.indexes.1),
                         step as u32,
                         swaps.len() as u32,
@@ -314,6 +314,7 @@ impl IndexScheduler {
                 task.status = Status::Succeeded;
                 Ok(vec![task])
             }
+            Batch::UpgradeDatabase { tasks } => self.process_upgrade(progress, tasks),
         }
     }
 

@@ -6,6 +6,7 @@ mod process_batch;
 mod process_dump_creation;
 mod process_index_operation;
 mod process_snapshot_creation;
+mod process_upgrade;
 #[cfg(test)]
 mod test;
 #[cfg(test)]

@@ -109,6 +109,7 @@ impl IndexScheduler {
             max_number_of_batched_tasks: usize::MAX,
             batched_tasks_size_limit: u64::MAX,
             instance_features: Default::default(),
+            auto_upgrade: true, // Don't cost much and will ensure the happy path works
         };
         configuration(&mut options);
 

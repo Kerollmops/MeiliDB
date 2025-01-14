@@ -59,7 +59,7 @@ impl TaskQueue {
         }
     }
 
-    pub(super) fn new(env: &Env, wtxn: &mut RwTxn) -> Result<Self> {
+    pub(crate) fn new(env: &Env, wtxn: &mut RwTxn) -> Result<Self> {
         Ok(Self {
             all_tasks: env.create_database(wtxn, Some(db_name::ALL_TASKS))?,
             status: env.create_database(wtxn, Some(db_name::STATUS))?,

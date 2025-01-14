@@ -130,6 +130,12 @@ make_enum_progress! {
 }
 
 make_enum_progress! {
+    pub enum UpgradeDatabaseProgress {
+        EnsuringCorrectnessOfTheSwap,
+    }
+}
+
+make_enum_progress! {
     pub enum InnerSwappingTwoIndexes {
         RetrieveTheTasks,
         UpdateTheTasks,
@@ -172,32 +178,6 @@ make_atomic_progress!(Task alias AtomicTaskStep => "task" );
 make_atomic_progress!(Document alias AtomicDocumentStep => "document" );
 make_atomic_progress!(Batch alias AtomicBatchStep => "batch" );
 make_atomic_progress!(UpdateFile alias AtomicUpdateFileStep => "update file" );
-
-pub struct VariableNameStep {
-    name: String,
-    current: u32,
-    total: u32,
-}
-
-impl VariableNameStep {
-    pub fn new(name: impl Into<String>, current: u32, total: u32) -> Self {
-        Self { name: name.into(), current, total }
-    }
-}
-
-impl Step for VariableNameStep {
-    fn name(&self) -> Cow<'static, str> {
-        self.name.clone().into()
-    }
-
-    fn current(&self) -> u32 {
-        self.current
-    }
-
-    fn total(&self) -> u32 {
-        self.total
-    }
-}
 
 #[cfg(test)]
 mod test {

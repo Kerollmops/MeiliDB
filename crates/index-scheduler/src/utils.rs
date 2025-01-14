@@ -234,6 +234,7 @@ pub fn swap_index_uid_in_task(task: &mut Task, swap: (&str, &str)) {
         K::TaskCancelation { .. }
         | K::TaskDeletion { .. }
         | K::DumpCreation { .. }
+        | K::UpgradeDatabase { .. }
         | K::SnapshotCreation => (),
     };
     if let Some(Details::IndexSwap { swaps }) = &mut task.details {
@@ -546,6 +547,9 @@ impl crate::IndexScheduler {
                     }
                     Details::Dump { dump_uid: _ } => {
                         assert_eq!(kind.as_kind(), Kind::DumpCreation);
+                    }
+                    Details::UpgradeDatabase { from: _ } => {
+                        assert_eq!(kind.as_kind(), Kind::UpgradeDatabase);
                     }
                 }
             }

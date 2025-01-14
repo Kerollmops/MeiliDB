@@ -47,6 +47,9 @@ pub(crate) enum Batch {
     IndexSwap {
         task: Task,
     },
+    UpgradeDatabase {
+        tasks: Vec<Task>,
+    },
 }
 
 #[derive(Debug)]
@@ -105,6 +108,7 @@ impl Batch {
             }
             Batch::SnapshotCreation(tasks)
             | Batch::TaskDeletions(tasks)
+            | Batch::UpgradeDatabase { tasks }
             | Batch::IndexDeletion { tasks, .. } => {
                 RoaringBitmap::from_iter(tasks.iter().map(|task| task.uid))
             }
@@ -138,6 +142,7 @@ impl Batch {
             | TaskDeletions(_)
             | SnapshotCreation(_)
             | Dump(_)
+            | UpgradeDatabase { .. }
             | IndexSwap { .. } => None,
             IndexOperation { op, .. } => Some(op.index_uid()),
             IndexCreation { index_uid, .. }
@@ -162,6 +167,7 @@ impl fmt::Display for Batch {
             Batch::IndexUpdate { .. } => f.write_str("IndexUpdate")?,
             Batch::IndexDeletion { .. } => f.write_str("IndexDeletion")?,
             Batch::IndexSwap { .. } => f.write_str("IndexSwap")?,
+            Batch::UpgradeDatabase { .. } => f.write_str("UpgradeDatabase")?,
         };
         match index_uid {
             Some(name) => f.write_fmt(format_args!(" on {name:?} from tasks: {tasks:?}")),
@@ -427,9 +433,18 @@ impl IndexScheduler {
         let mut current_batch = ProcessingBatch::new(batch_id);
 
         let enqueued = &self.queue.tasks.get_status(rtxn, Status::Enqueued)?;
-        let to_cancel = self.queue.tasks.get_kind(rtxn, Kind::TaskCancelation)? & enqueued;
+
+        // 0. The priority over everything is to upgrade the instance
+        let upgrade = self.queue.tasks.get_kind(rtxn, Kind::UpgradeDatabase)? & enqueued;
+        // There shouldn't be multiple upgrade tasks but just in case we're going to batch all of them at the same time
+        if !upgrade.is_empty() {
+            let mut tasks = self.queue.tasks.get_existing_tasks(rtxn, upgrade)?;
+            current_batch.processing(&mut tasks);
+            return Ok(Some((Batch::UpgradeDatabase { tasks }, current_batch)));
+        }
 
         // 1. we get the last task to cancel.
+        let to_cancel = self.queue.tasks.get_kind(rtxn, Kind::TaskCancelation)? & enqueued;
         if let Some(task_id) = to_cancel.max() {
             let mut task =
                 self.queue.tasks.get_task(rtxn, task_id)?.ok_or(Error::CorruptedTaskQueue)?;
