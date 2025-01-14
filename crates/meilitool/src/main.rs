@@ -1,6 +1,7 @@
 use std::fs::{read_dir, read_to_string, remove_file, File};
 use std::io::BufWriter;
 use std::path::PathBuf;
+use std::time::Instant;
 
 use anyhow::Context;
 use clap::{Parser, Subcommand};
@@ -8,7 +9,9 @@ use dump::{DumpWriter, IndexMetadata};
 use file_store::FileStore;
 use meilisearch_auth::AuthController;
 use meilisearch_types::heed::types::{SerdeJson, Str};
-use meilisearch_types::heed::{Database, Env, EnvOpenOptions, RoTxn, RwTxn, Unspecified};
+use meilisearch_types::heed::{
+    CompactionOption, Database, Env, EnvOpenOptions, RoTxn, RwTxn, Unspecified,
+};
 use meilisearch_types::milli::documents::{obkv_to_object, DocumentsBatchReader};
 use meilisearch_types::milli::{obkv_to_json, BEU32};
 use meilisearch_types::tasks::{Status, Task};
@@ -78,6 +81,27 @@ enum Command {
         #[arg(long)]
         target_version: String,
     },
+
+    /// Compact the index by using LMDB.
+    ///
+    /// You must run this command while Meilisearch is off. The reason is that Meilisearch keep the
+    /// indexes opened and this compaction operation writes into another file. Meilisearch will not
+    /// switch to the new file.
+    ///
+    /// **Another possibility** is to keep Meilisearch running to serve search requests, run the
+    /// compaction and once done, close and immediately reopen Meilisearch. This way Meilisearch
+    /// will reopened the data.mdb file when rebooting and see the newly compacted file, ignoring
+    /// the previous non-compacted data.
+    ///
+    /// Note that the compaction will open the index, copy and compact the index into another file
+    /// **on the same disk as the index** and replace the previous index with the newly compacted
+    /// one. Which means that the disk must have enough room for at most two time the index size.
+    ///
+    /// To make sure not to loose any data, this tool takes a mutable transaction on the index
+    /// before running the copy and compaction. This way the current indexation must finish before
+    /// the compaction operation can start. Once the compaction is done, the big index is replaced
+    /// by the compacted one and the mutable transaction is released.
+    CompactIndex { index_name: String },
 }
 
 fn main() -> anyhow::Result<()> {
@@ -94,6 +118,7 @@ fn main() -> anyhow::Result<()> {
             let target_version = parse_version(&target_version).context("While parsing `--target-version`. Make sure `--target-version` is in the format MAJOR.MINOR.PATCH")?;
             OfflineUpgrade { db_path, current_version: detected_version, target_version }.upgrade()
         }
+        Command::CompactIndex { index_name } => compact_index(db_path, &index_name),
     }
 }
 
@@ -329,6 +354,76 @@ fn export_a_dump(
     dump.persist_to(BufWriter::new(file))?;
 
     eprintln!("Dump exported at path {:?}", path.display());
+
+    Ok(())
+}
+
+fn compact_index(db_path: PathBuf, index_name: &str) -> anyhow::Result<()> {
+    let index_scheduler_path = db_path.join("tasks");
+    let env = unsafe { EnvOpenOptions::new().max_dbs(100).open(&index_scheduler_path) }
+        .with_context(|| format!("While trying to open {:?}", index_scheduler_path.display()))?;
+
+    let rtxn = env.read_txn()?;
+    let index_mapping: Database<Str, UuidCodec> =
+        try_opening_database(&env, &rtxn, "index-mapping")?;
+
+    for result in index_mapping.iter(&rtxn)? {
+        let (uid, uuid) = result?;
+
+        if uid != index_name {
+            eprintln!("Found index {uid} and skipping it");
+            continue;
+        } else {
+            eprintln!("Found index {uid} 🎉");
+        }
+
+        let index_path = db_path.join("indexes").join(uuid.to_string());
+        let index = Index::new(EnvOpenOptions::new(), &index_path).with_context(|| {
+            format!("While trying to open the index at path {:?}", index_path.display())
+        })?;
+
+        eprintln!("Awaiting for a mutable transaction...");
+        let _wtxn = index.write_txn().context("While awaiting for a write transaction")?;
+
+        // We create and immediately drop the file because the
+        let non_compacted_index_file_path = index_path.join("data.mdb");
+        let compacted_index_file_path = index_path.join("data.mdb.cpy");
+
+        eprintln!("Compacting the index...");
+        let before_compaction = Instant::now();
+        let new_file = index
+            .copy_to_file(&compacted_index_file_path, CompactionOption::Enabled)
+            .with_context(|| format!("While compacting {}", compacted_index_file_path.display()))?;
+
+        let after_size = new_file.metadata()?.len();
+        let before_size = std::fs::metadata(&non_compacted_index_file_path)
+            .with_context(|| {
+                format!(
+                    "While retrieving the metadata of {}",
+                    non_compacted_index_file_path.display(),
+                )
+            })?
+            .len();
+
+        let reduction = before_size as f64 / after_size as f64;
+        println!("Compaction successful. Took around {:.2?}", before_compaction.elapsed());
+        eprintln!("The index went from {before_size} bytes to {after_size} bytes ({reduction:.2}x reduction)");
+
+        eprintln!("Replacing the non-compacted index by the compacted one...");
+        std::fs::rename(&compacted_index_file_path, &non_compacted_index_file_path).with_context(
+            || {
+                format!(
+                    "While renaming {} into {}",
+                    compacted_index_file_path.display(),
+                    non_compacted_index_file_path.display(),
+                )
+            },
+        )?;
+
+        drop(new_file);
+
+        println!("Everything's done 🎉");
+    }
 
     Ok(())
 }
